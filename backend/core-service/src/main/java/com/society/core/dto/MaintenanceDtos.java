@@ -14,7 +14,8 @@ public class MaintenanceDtos {
             @NotNull @Min(1) @Max(12) Integer billingMonth,
             @NotNull @DecimalMin(value = "0.0", inclusive = false) BigDecimal amount,
             String paymentMode,
-            String notes
+            String notes,
+            String memberId
     ) {}
 
     /** Create a charge for a flat and mark it as PENDING. */
@@ -23,12 +24,14 @@ public class MaintenanceDtos {
             @NotNull @Min(2000) @Max(2100) Integer billingYear,
             @NotNull @Min(1) @Max(12) Integer billingMonth,
             @NotNull @DecimalMin(value = "0.0", inclusive = false) BigDecimal amount,
-            String notes
+            String notes,
+            String memberId
     ) {}
 
     public record MaintenanceChargeResponse(
             String id,
             String flatNumber,
+            String memberId,
             int billingYear,
             int billingMonth,
             BigDecimal amount,

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MaintenanceService } from '../../api/services'
+import { MaintenanceService, MemberService } from '../../api/services'
 import { Alert, SectionTitle, StatusBadge } from '../../components/ui/Feedback'
 import { useToast } from '../../context/ToastContext'
 import { getApiErrorMessage } from '../../utils/apiError'
+import { monthName } from '../../utils/share'
 
 const now = new Date()
 const emptyForm = {
+  memberId: '',
   flatNumber: '',
   billingYear: now.getFullYear(),
   billingMonth: now.getMonth() + 1,
@@ -13,17 +15,36 @@ const emptyForm = {
   notes: '',
 }
 
+function normalizeFlat(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function memberLabel(m) {
+  return `${m.fullName} · Flat ${m.flatNumber}${m.mobile ? ` · ${m.mobile}` : ''}`
+}
+
 export default function MaintenanceTracker() {
   const toast = useToast()
   const [charges, setCharges] = useState([])
+  const [members, setMembers] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [flatFilter, setFlatFilter] = useState('')
+  const [search, setSearch] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [trackerYear, setTrackerYear] = useState(now.getFullYear())
+  const [trackerMonth, setTrackerMonth] = useState(now.getMonth() + 1)
+  const [trackerDefaultAmount, setTrackerDefaultAmount] = useState('')
+  const [trackerBusyKey, setTrackerBusyKey] = useState('')
 
   async function load() {
     try {
-      setCharges(await MaintenanceService.list())
+      const [chargeList, memberList] = await Promise.all([
+        MaintenanceService.list(),
+        MemberService.list(),
+      ])
+      setCharges(chargeList)
+      setMembers(memberList.filter((m) => m.active !== false))
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not load maintenance records.'))
     }
@@ -31,29 +52,143 @@ export default function MaintenanceTracker() {
 
   useEffect(() => { load() }, [])
 
+  const membersById = useMemo(() => {
+    const map = {}
+    members.forEach((m) => { map[m.id] = m })
+    return map
+  }, [members])
+
+  const membersByFlat = useMemo(() => {
+    const map = {}
+    members.forEach((m) => {
+      const key = normalizeFlat(m.flatNumber)
+      if (!key) return
+      if (!map[key]) map[key] = m
+    })
+    return map
+  }, [members])
+
+  function resolveMember(charge) {
+    if (charge.memberId && membersById[charge.memberId]) return membersById[charge.memberId]
+    return membersByFlat[normalizeFlat(charge.flatNumber)] || null
+  }
+
+  const enriched = useMemo(
+    () => charges.map((c) => {
+      const member = resolveMember(c)
+      return {
+        ...c,
+        memberName: member?.fullName || 'Unknown member',
+        memberMobile: member?.mobile || '',
+        memberEmail: member?.email || '',
+        memberActive: member?.active !== false,
+        matched: !!member,
+      }
+    }),
+    [charges, membersById, membersByFlat],
+  )
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return enriched.filter((c) => {
+      if (flatFilter && normalizeFlat(c.flatNumber) !== normalizeFlat(flatFilter)) return false
+      if (!q) return true
+      return (
+        c.memberName.toLowerCase().includes(q)
+        || String(c.flatNumber).toLowerCase().includes(q)
+        || String(c.memberMobile).includes(q)
+        || String(c.memberEmail).toLowerCase().includes(q)
+      )
+    })
+  }, [enriched, flatFilter, search])
+
   const flats = useMemo(
-    () => [...new Set(charges.map((c) => c.flatNumber))].sort(),
+    () => [...new Set(charges.map((c) => c.flatNumber))].sort((a, b) => String(a).localeCompare(String(b))),
     [charges],
   )
 
-  const filtered = useMemo(
-    () => (flatFilter ? charges.filter((c) => c.flatNumber === flatFilter) : charges),
-    [charges, flatFilter],
-  )
-
-  const byFlat = useMemo(() => {
+  const byMember = useMemo(() => {
     const map = {}
     for (const c of filtered) {
-      map[c.flatNumber] = map[c.flatNumber] || { pending: 0, paid: 0, count: 0 }
-      map[c.flatNumber].count += 1
-      if (c.status === 'PENDING') map[c.flatNumber].pending += Number(c.amount)
-      else map[c.flatNumber].paid += Number(c.amount)
+      const key = normalizeFlat(c.flatNumber) || c.id
+      if (!map[key]) {
+        map[key] = {
+          flatNumber: c.flatNumber,
+          memberName: c.memberName,
+          memberMobile: c.memberMobile,
+          pending: 0,
+          paid: 0,
+          count: 0,
+        }
+      }
+      map[key].count += 1
+      if (c.status === 'PENDING') map[key].pending += Number(c.amount)
+      else map[key].paid += Number(c.amount)
     }
-    return Object.entries(map)
+    return Object.values(map).sort((a, b) => a.memberName.localeCompare(b.memberName))
   }, [filtered])
 
+  /** One row per registered member for the selected tracker month/year. */
+  const periodRows = useMemo(() => {
+    const year = Number(trackerYear)
+    const month = Number(trackerMonth)
+    return members
+      .slice()
+      .sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber)) || a.fullName.localeCompare(b.fullName))
+      .map((member) => {
+        const charge = charges.find(
+          (c) =>
+            Number(c.billingYear) === year
+            && Number(c.billingMonth) === month
+            && (
+              (c.memberId && c.memberId === member.id)
+              || normalizeFlat(c.flatNumber) === normalizeFlat(member.flatNumber)
+            ),
+        )
+        const fallbackAmount = charges
+          .filter((c) => normalizeFlat(c.flatNumber) === normalizeFlat(member.flatNumber))
+          .sort((a, b) => (b.billingYear - a.billingYear) || (b.billingMonth - a.billingMonth))[0]?.amount
+
+        return {
+          key: member.id,
+          memberId: member.id,
+          memberName: member.fullName,
+          memberMobile: member.mobile || '',
+          memberEmail: member.email || '',
+          flatNumber: member.flatNumber,
+          billingYear: year,
+          billingMonth: month,
+          chargeId: charge?.id || null,
+          amount: charge ? Number(charge.amount) : Number(trackerDefaultAmount || fallbackAmount || 0),
+          status: charge?.status || 'PENDING',
+          notes: charge?.notes || '',
+          isVirtual: !charge,
+        }
+      })
+  }, [members, charges, trackerYear, trackerMonth, trackerDefaultAmount])
+
+  const periodStats = useMemo(() => {
+    const paid = periodRows.filter((r) => r.status === 'PAID').length
+    const pending = periodRows.length - paid
+    return { paid, pending, total: periodRows.length }
+  }, [periodRows])
+
+  function selectMember(memberId) {
+    const member = membersById[memberId]
+    setForm((prev) => ({
+      ...prev,
+      memberId,
+      flatNumber: member?.flatNumber || prev.flatNumber,
+    }))
+  }
+
   function update(e) {
-    setForm({ ...form, [e.target.name]: e.target.value })
+    const { name, value } = e.target
+    if (name === 'memberId') {
+      selectMember(value)
+      return
+    }
+    setForm({ ...form, [name]: value })
   }
 
   function payload() {
@@ -63,16 +198,21 @@ export default function MaintenanceTracker() {
       billingMonth: Number(form.billingMonth),
       amount: Number(form.amount),
       notes: form.notes,
+      memberId: form.memberId || null,
     }
   }
 
   async function submit(action) {
     setError('')
+    if (!form.flatNumber) {
+      setError('Select a member or enter a flat number.')
+      return
+    }
     setBusy(true)
     try {
       if (action === 'PAID') await MaintenanceService.collect(payload())
       else await MaintenanceService.markPending(payload())
-      setForm(emptyForm)
+      setForm({ ...emptyForm, billingYear: form.billingYear, billingMonth: form.billingMonth })
       toast.success(action === 'PAID' ? 'Maintenance marked paid.' : 'Maintenance marked pending.')
       await load()
     } catch (err) {
@@ -86,7 +226,7 @@ export default function MaintenanceTracker() {
     try {
       if (charge.status === 'PENDING') {
         await MaintenanceService.markPaid(charge.id)
-        toast.success(`Flat ${charge.flatNumber} marked paid.`)
+        toast.success(`${charge.memberName} (Flat ${charge.flatNumber}) marked paid.`)
       } else {
         await MaintenanceService.markPending({
           flatNumber: charge.flatNumber,
@@ -94,12 +234,53 @@ export default function MaintenanceTracker() {
           billingMonth: charge.billingMonth,
           amount: charge.amount,
           notes: charge.notes,
+          memberId: charge.memberId || null,
         })
-        toast.info(`Flat ${charge.flatNumber} marked pending.`)
+        toast.info(`${charge.memberName} (Flat ${charge.flatNumber}) marked pending.`)
       }
       await load()
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not update status.'))
+    }
+  }
+
+  async function togglePeriodStatus(row) {
+    if (!row.amount || Number(row.amount) <= 0) {
+      toast.error('Set a default amount above (or record amount once) before updating status.')
+      return
+    }
+    setTrackerBusyKey(row.key)
+    try {
+      if (row.status === 'PENDING') {
+        if (row.chargeId) {
+          await MaintenanceService.markPaid(row.chargeId)
+        } else {
+          await MaintenanceService.collect({
+            flatNumber: row.flatNumber,
+            billingYear: row.billingYear,
+            billingMonth: row.billingMonth,
+            amount: Number(row.amount),
+            memberId: row.memberId,
+            notes: `Marked paid for ${monthName(row.billingMonth)} ${row.billingYear}`,
+          })
+        }
+        toast.success(`${row.memberName} marked paid for ${monthName(row.billingMonth)} ${row.billingYear}.`)
+      } else {
+        await MaintenanceService.markPending({
+          flatNumber: row.flatNumber,
+          billingYear: row.billingYear,
+          billingMonth: row.billingMonth,
+          amount: Number(row.amount),
+          memberId: row.memberId,
+          notes: row.notes,
+        })
+        toast.info(`${row.memberName} marked not paid for ${monthName(row.billingMonth)} ${row.billingYear}.`)
+      }
+      await load()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not update maintenance status.'))
+    } finally {
+      setTrackerBusyKey('')
     }
   }
 
@@ -108,13 +289,29 @@ export default function MaintenanceTracker() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-1">
           <div className="card">
-            <SectionTitle title="Record Maintenance" subtitle="Collect or flag dues" />
+            <SectionTitle title="Record Maintenance" subtitle="Pick a member, then mark paid or pending" />
             <Alert type="error">{error}</Alert>
             <form className="mt-3 space-y-3" onSubmit={(e) => e.preventDefault()}>
               <div>
-                <label className="label">Flat Number</label>
-                <input name="flatNumber" className="input" value={form.flatNumber} onChange={update} required placeholder="A-101" />
+                <label className="label">Member</label>
+                <select name="memberId" className="input" value={form.memberId} onChange={update}>
+                  <option value="">Select member</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>{memberLabel(m)}</option>
+                  ))}
+                </select>
               </div>
+              <div>
+                <label className="label">Flat Number</label>
+                <input name="flatNumber" className="input" value={form.flatNumber} onChange={update} required placeholder="Auto-filled from member" />
+              </div>
+              {form.memberId && membersById[form.memberId] && (
+                <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  <p className="font-semibold text-slate-900">{membersById[form.memberId].fullName}</p>
+                  <p>{membersById[form.memberId].mobile || 'No mobile'}</p>
+                  <p>{membersById[form.memberId].email || 'No email'}</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Year</label>
@@ -122,7 +319,11 @@ export default function MaintenanceTracker() {
                 </div>
                 <div>
                   <label className="label">Month</label>
-                  <input name="billingMonth" type="number" min="1" max="12" className="input" value={form.billingMonth} onChange={update} />
+                  <select name="billingMonth" className="input" value={form.billingMonth} onChange={update}>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                      <option key={m} value={m}>{monthName(m)}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div>
@@ -145,38 +346,99 @@ export default function MaintenanceTracker() {
           <div className="card">
             <SectionTitle
               title="Member-wise summary"
-              subtitle="Pending vs paid by flat"
+              subtitle="Who has paid and who still owes"
               action={
-                <select className="input w-40" value={flatFilter} onChange={(e) => setFlatFilter(e.target.value)}>
-                  <option value="">All flats</option>
-                  {flats.map((f) => <option key={f} value={f}>{f}</option>)}
-                </select>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    className="input w-44"
+                    placeholder="Search name / flat"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                  <select className="input w-36" value={flatFilter} onChange={(e) => setFlatFilter(e.target.value)}>
+                    <option value="">All flats</option>
+                    {flats.map((f) => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
               }
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              {byFlat.map(([flat, stats]) => (
+              {byMember.map((row) => (
                 <button
-                  key={flat}
+                  key={row.flatNumber}
                   type="button"
-                  onClick={() => setFlatFilter(flat)}
-                  className="rounded-xl border border-slate-100 p-4 text-left hover:border-orange-200"
+                  onClick={() => setFlatFilter(row.flatNumber)}
+                  className={`rounded-xl border p-4 text-left transition ${
+                    flatFilter === row.flatNumber ? 'border-orange-300 bg-orange-50/40' : 'border-slate-100 hover:border-orange-200'
+                  }`}
                 >
-                  <p className="font-bold text-slate-950">Flat {flat}</p>
-                  <p className="mt-2 text-sm text-emerald-700">Paid ₹{stats.paid.toLocaleString('en-IN')}</p>
-                  <p className="text-sm text-amber-700">Pending ₹{stats.pending.toLocaleString('en-IN')}</p>
-                  <p className="mt-1 text-xs text-slate-400">{stats.count} records</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-slate-950">{row.memberName}</p>
+                      <p className="mt-0.5 text-sm text-slate-500">Flat {row.flatNumber}{row.memberMobile ? ` · ${row.memberMobile}` : ''}</p>
+                    </div>
+                    <span className="badge bg-slate-100 text-slate-600">{row.count}</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-lg bg-emerald-50 px-2.5 py-2 text-emerald-800">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide">Paid</p>
+                      <p className="font-bold">₹{row.paid.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 px-2.5 py-2 text-amber-800">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide">Pending</p>
+                      <p className="font-bold">₹{row.pending.toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
                 </button>
               ))}
-              {byFlat.length === 0 && <p className="text-sm text-gray-400">No records yet.</p>}
+              {byMember.length === 0 && <p className="text-sm text-gray-400">No records yet.</p>}
             </div>
           </div>
 
           <div className="card">
-            <SectionTitle title="Maintenance Tracker" subtitle={`${filtered.length} records`} />
+            <SectionTitle
+              title="Maintenance Tracker"
+              subtitle={`${monthName(trackerMonth)} ${trackerYear} · ${periodStats.paid} paid · ${periodStats.pending} not paid · ${periodStats.total} members`}
+              action={
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="label !mb-1">Month</label>
+                    <select className="input w-36" value={trackerMonth} onChange={(e) => setTrackerMonth(Number(e.target.value))}>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <option key={m} value={m}>{monthName(m)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label !mb-1">Year</label>
+                    <input
+                      type="number"
+                      className="input w-24"
+                      value={trackerYear}
+                      onChange={(e) => setTrackerYear(Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label !mb-1">Default amount (₹)</label>
+                    <input
+                      type="number"
+                      className="input w-32"
+                      placeholder="e.g. 3000"
+                      value={trackerDefaultAmount}
+                      onChange={(e) => setTrackerDefaultAmount(e.target.value)}
+                    />
+                  </div>
+                </div>
+              }
+            />
+            <p className="mb-4 text-sm text-slate-500">
+              All registered members appear for the selected month. Default status is <span className="font-semibold text-amber-700">not paid</span> until you mark them paid.
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-gray-500">
+                    <th className="py-2 pr-4">Member</th>
                     <th className="py-2 pr-4">Flat</th>
                     <th className="py-2 pr-4">Period</th>
                     <th className="py-2 pr-4">Amount</th>
@@ -185,21 +447,46 @@ export default function MaintenanceTracker() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((c) => (
-                    <tr key={c.id} className="border-b last:border-0">
-                      <td className="py-2 pr-4 font-medium">{c.flatNumber}</td>
-                      <td className="py-2 pr-4">{c.billingMonth}/{c.billingYear}</td>
-                      <td className="py-2 pr-4">₹{Number(c.amount).toLocaleString('en-IN')}</td>
-                      <td className="py-2 pr-4"><StatusBadge status={c.status} /></td>
-                      <td className="py-2 pr-4">
-                        <button onClick={() => togglePaid(c)} className={c.status === 'PENDING' ? 'btn-success' : 'btn-secondary'}>
-                          {c.status === 'PENDING' ? 'Mark Paid' : 'Mark Pending'}
+                  {periodRows.map((row) => (
+                    <tr key={row.key} className="border-b last:border-0 align-top">
+                      <td className="py-3 pr-4">
+                        <p className="font-semibold text-slate-950">{row.memberName}</p>
+                        <p className="text-xs text-slate-500">{row.memberMobile || 'No mobile'}</p>
+                        <p className="text-xs text-slate-400">{row.memberEmail || 'No email'}</p>
+                      </td>
+                      <td className="py-3 pr-4 font-medium">{row.flatNumber}</td>
+                      <td className="py-3 pr-4">{monthName(row.billingMonth)} {row.billingYear}</td>
+                      <td className="py-3 pr-4 font-semibold">
+                        {row.amount > 0 ? `₹${Number(row.amount).toLocaleString('en-IN')}` : '—'}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <StatusBadge status={row.status === 'PAID' ? 'PAID' : 'PENDING'} />
+                        {row.isVirtual && row.status !== 'PAID' && (
+                          <p className="mt-1 text-[11px] text-slate-400">Not recorded yet</p>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <button
+                          type="button"
+                          disabled={trackerBusyKey === row.key}
+                          onClick={() => togglePeriodStatus(row)}
+                          className={row.status === 'PENDING' ? 'btn-success' : 'btn-secondary'}
+                        >
+                          {trackerBusyKey === row.key
+                            ? 'Updating…'
+                            : row.status === 'PENDING'
+                              ? 'Mark Paid'
+                              : 'Mark Not Paid'}
                         </button>
                       </td>
                     </tr>
                   ))}
-                  {filtered.length === 0 && (
-                    <tr><td colSpan="5" className="py-6 text-center text-gray-400">No maintenance records yet.</td></tr>
+                  {periodRows.length === 0 && (
+                    <tr>
+                      <td colSpan="6" className="py-6 text-center text-gray-400">
+                        No members in directory yet. Add members first.
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>

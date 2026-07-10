@@ -30,7 +30,8 @@ public class MaintenanceService {
                 .orElseGet(MaintenanceCharge::new);
 
         charge.setSocietyId(societyId);
-        charge.setFlatNumber(req.flatNumber());
+        charge.setFlatNumber(req.flatNumber().trim());
+        charge.setMemberId(parseMemberId(req.memberId()));
         charge.setBillingYear(req.billingYear());
         charge.setBillingMonth(req.billingMonth());
         charge.setAmount(req.amount());
@@ -50,7 +51,8 @@ public class MaintenanceService {
                 .orElseGet(MaintenanceCharge::new);
 
         charge.setSocietyId(societyId);
-        charge.setFlatNumber(req.flatNumber());
+        charge.setFlatNumber(req.flatNumber().trim());
+        charge.setMemberId(parseMemberId(req.memberId()));
         charge.setBillingYear(req.billingYear());
         charge.setBillingMonth(req.billingMonth());
         charge.setAmount(req.amount());
@@ -77,10 +79,16 @@ public class MaintenanceService {
                 .stream().map(MaintenanceService::toResponse).toList();
     }
 
+    private static UUID parseMemberId(String memberId) {
+        if (memberId == null || memberId.isBlank()) return null;
+        return UUID.fromString(memberId.trim());
+    }
+
     static MaintenanceChargeResponse toResponse(MaintenanceCharge c) {
         return new MaintenanceChargeResponse(
                 c.getId().toString(),
                 c.getFlatNumber(),
+                c.getMemberId() == null ? null : c.getMemberId().toString(),
                 c.getBillingYear(),
                 c.getBillingMonth(),
                 c.getAmount(),
