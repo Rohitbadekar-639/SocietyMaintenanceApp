@@ -25,6 +25,16 @@ public class AuthDtos {
             @NotBlank String password
     ) {}
 
+    /** Resident self-signup into an existing society using the society code. */
+    public record RegisterMemberRequest(
+            @NotBlank String societyCode,
+            @NotBlank String fullName,
+            @NotBlank @Email String email,
+            @NotBlank String mobile,
+            @NotBlank String flatNumber,
+            @NotBlank @Size(min = 6, message = "Password must be at least 6 characters") String password
+    ) {}
+
     public record AuthResponse(
             String token,
             String tokenType,

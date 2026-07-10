@@ -49,6 +49,17 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function registerMember(payload) {
+    setLoading(true)
+    try {
+      const { data } = await identityApi.post('/auth/register-member', payload)
+      persistSession(data)
+      return data.user
+    } finally {
+      setLoading(false)
+    }
+  }
+
   function logout() {
     clearSession()
     setUser(null)
@@ -62,6 +73,7 @@ export function AuthProvider({ children }) {
       isAdmin: user?.role === 'ADMIN',
       login,
       registerSociety,
+      registerMember,
       logout,
     }),
     [user, loading],

@@ -59,6 +59,35 @@ public class AuthService {
         return new AuthResponse(token, "Bearer", toView(admin));
     }
 
+    @Transactional
+    public AuthResponse registerMember(RegisterMemberRequest req) {
+        Society society = societyRepository.findBySocietyCode(req.societyCode().trim())
+                .orElseThrow(() -> new NotFoundException("Society code not found. Ask your committee for the correct code."));
+
+        if (userRepository.existsBySocietyIdAndEmail(society.getId(), req.email())) {
+            throw new ConflictException("Email already registered for this society");
+        }
+        if (userRepository.existsBySocietyIdAndMobile(society.getId(), req.mobile())) {
+            throw new ConflictException("Mobile already registered for this society");
+        }
+        if (userRepository.existsByEmail(req.email())) {
+            throw new ConflictException("Email already in use");
+        }
+
+        User member = new User();
+        member.setSocietyId(society.getId());
+        member.setFullName(req.fullName());
+        member.setEmail(req.email());
+        member.setMobile(req.mobile());
+        member.setFlatNumber(req.flatNumber());
+        member.setPasswordHash(passwordEncoder.encode(req.password()));
+        member.setRole(Role.MEMBER);
+        member = userRepository.save(member);
+
+        String token = jwtService.generateToken(member);
+        return new AuthResponse(token, "Bearer", toView(member));
+    }
+
     @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest req) {
         User user = userRepository.findByEmail(req.email())

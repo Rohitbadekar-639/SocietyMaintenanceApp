@@ -24,6 +24,11 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerSociety(req));
     }
 
+    @PostMapping("/register-member")
+    public ResponseEntity<AuthResponse> registerMember(@Valid @RequestBody RegisterMemberRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerMember(req));
+    }
+
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest req) {
         return ResponseEntity.ok(authService.login(req));

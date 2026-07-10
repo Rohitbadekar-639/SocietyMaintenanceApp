@@ -37,7 +37,7 @@ export function buildMonthlyReportText(society, report) {
     lines.push('', '*Expense Breakdown:*')
     report.expenseBreakdown.forEach((c) => lines.push(`- ${c.category}: ${inr(c.amount)}`))
   }
-  lines.push('', 'Shared via SocietyHub')
+  lines.push('', 'Shared via SocietyWale')
   return lines.join('\n')
 }
 
@@ -51,6 +51,35 @@ export function buildAnnualReportText(society, sheet) {
     `Closing Balance: ${inr(sheet.closingBalance)}`,
     `Outstanding Dues: ${inr(sheet.pendingDues)}`,
     '',
-    'Shared via SocietyHub',
+    'Shared via SocietyWale',
   ].join('\n')
+}
+
+export function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export function downloadReportAsPdf(title, bodyHtml) {
+  const win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700')
+  if (!win) return
+  win.document.write(`<!doctype html><html><head><title>${title}</title>
+    <style>
+      body{font-family:Segoe UI,Arial,sans-serif;padding:32px;color:#0f172a}
+      h1{font-size:22px;margin:0 0 8px} p{color:#64748b}
+      table{width:100%;border-collapse:collapse;margin-top:16px}
+      th,td{border-bottom:1px solid #e2e8f0;padding:8px;text-align:left}
+      .right{text-align:right}
+    </style></head><body>
+    <h1>${title}</h1>
+    <p>SocietyWale financial report · ${new Date().toLocaleString()}</p>
+    ${bodyHtml}
+    <script>window.onload=()=>{window.print()}</script>
+    </body></html>`)
+  win.document.close()
 }

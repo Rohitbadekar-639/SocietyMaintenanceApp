@@ -69,6 +69,11 @@ export default function Login() {
           <Link to="/register" className="font-bold text-orange-600 hover:text-orange-700">
             Create your workspace
           </Link>
+          <br />
+          Society resident?{' '}
+          <Link to="/register-member" className="font-bold text-orange-600 hover:text-orange-700">
+            Member signup
+          </Link>
         </p>
       </div>
     </AuthShell>

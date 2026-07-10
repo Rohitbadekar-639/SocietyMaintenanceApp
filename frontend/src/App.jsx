@@ -8,6 +8,7 @@ import About from './pages/public/About'
 import Contact from './pages/public/Contact'
 import Login from './pages/auth/Login'
 import RegisterSociety from './pages/auth/RegisterSociety'
+import RegisterMember from './pages/auth/RegisterMember'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import MemberDashboard from './pages/member/MemberDashboard'
 import FinancialReports from './pages/reports/FinancialReports'
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegisterSociety />} />
+          <Route path="/register-member" element={<RegisterMember />} />
 
           {/* Admin */}
           <Route

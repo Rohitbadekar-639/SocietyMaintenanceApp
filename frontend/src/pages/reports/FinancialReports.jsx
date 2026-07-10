@@ -1,17 +1,22 @@
 import { useState } from 'react'
 import { ReportService } from '../../api/services'
 import { Alert, SectionTitle } from '../../components/ui/Feedback'
+import { useToast } from '../../context/ToastContext'
+import { getApiErrorMessage } from '../../utils/apiError'
 import {
   inr,
   monthName,
   whatsappLink,
   buildMonthlyReportText,
   buildAnnualReportText,
+  downloadTextFile,
+  downloadReportAsPdf,
 } from '../../utils/share'
 
 const now = new Date()
 
 export default function FinancialReports() {
+  const toast = useToast()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [openingBalance, setOpeningBalance] = useState(0)
@@ -23,8 +28,9 @@ export default function FinancialReports() {
     setError('')
     try {
       setMonthly(await ReportService.monthly(year, month))
+      toast.success('Monthly report generated.')
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not load monthly report.')
+      setError(getApiErrorMessage(err, 'Could not load monthly report.'))
     }
   }
 
@@ -32,26 +38,59 @@ export default function FinancialReports() {
     setError('')
     try {
       setAnnual(await ReportService.annual(year, openingBalance))
+      toast.success('Annual report generated.')
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not load annual report.')
+      setError(getApiErrorMessage(err, 'Could not load annual report.'))
     }
   }
 
   function shareMonthly() {
-    const text = buildMonthlyReportText('Our Society', monthly)
-    window.open(whatsappLink(text), '_blank')
+    window.open(whatsappLink(buildMonthlyReportText('SocietyWale Society', monthly)), '_blank')
   }
 
   function shareAnnual() {
-    const text = buildAnnualReportText('Our Society', annual)
-    window.open(whatsappLink(text), '_blank')
+    window.open(whatsappLink(buildAnnualReportText('SocietyWale Society', annual)), '_blank')
+  }
+
+  function downloadMonthly() {
+    const text = buildMonthlyReportText('SocietyWale Society', monthly)
+    downloadTextFile(`monthly-report-${monthly.year}-${monthly.month}.txt`, text)
+    downloadReportAsPdf(
+      `Monthly Report — ${monthName(monthly.month)} ${monthly.year}`,
+      `<table>
+        <tr><td>Collected</td><td class="right">${inr(monthly.maintenanceCollected)}</td></tr>
+        <tr><td>Pending</td><td class="right">${inr(monthly.maintenancePending)}</td></tr>
+        <tr><td>Expenses</td><td class="right">${inr(monthly.totalExpenses)}</td></tr>
+        <tr><td>Net</td><td class="right">${inr(monthly.netSurplusDeficit)}</td></tr>
+      </table>`,
+    )
+    toast.success('Download started. Use Print → Save as PDF if needed.')
+  }
+
+  function downloadAnnual() {
+    const text = buildAnnualReportText('SocietyWale Society', annual)
+    downloadTextFile(`annual-report-${annual.year}.txt`, text)
+    const rows = (annual.monthlyLines || [])
+      .map((l) => `<tr><td>${monthName(l.month)}</td><td class="right">${inr(l.income)}</td><td class="right">${inr(l.expenses)}</td><td class="right">${inr(l.net)}</td></tr>`)
+      .join('')
+    downloadReportAsPdf(
+      `Annual Balance Sheet — ${annual.year}`,
+      `<table>
+        <tr><td>Opening</td><td class="right">${inr(annual.openingBalance)}</td></tr>
+        <tr><td>Income</td><td class="right">${inr(annual.totalIncome)}</td></tr>
+        <tr><td>Expenses</td><td class="right">${inr(annual.totalExpenses)}</td></tr>
+        <tr><td>Closing</td><td class="right">${inr(annual.closingBalance)}</td></tr>
+      </table>
+      <table><thead><tr><th>Month</th><th class="right">Income</th><th class="right">Expenses</th><th class="right">Net</th></tr></thead><tbody>${rows}</tbody></table>`,
+    )
+    toast.success('Download started. Use Print → Save as PDF if needed.')
   }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Financial Reports</h1>
-        <p className="text-sm text-gray-500">Monthly income-expense and annual balance sheet</p>
+        <p className="text-sm text-gray-500">Download reports or share on WhatsApp. Members can view; admins manage source data.</p>
       </div>
 
       <Alert type="error">{error}</Alert>
@@ -80,50 +119,23 @@ export default function FinancialReports() {
         </div>
       </div>
 
-      {/* Monthly Income-Expense */}
       {monthly && (
         <div className="card">
           <SectionTitle
             title={`Monthly Income-Expense — ${monthName(monthly.month)} ${monthly.year}`}
             action={
-              <button className="btn-success" onClick={shareMonthly}>
-                Share on WhatsApp
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-secondary" onClick={downloadMonthly}>Download</button>
+                <button className="btn-success" onClick={shareMonthly}>Share on WhatsApp</button>
+              </div>
             }
           />
           <div className="grid gap-4 sm:grid-cols-4">
             <Stat label="Collected" value={inr(monthly.maintenanceCollected)} tone="text-emerald-600" />
             <Stat label="Pending" value={inr(monthly.maintenancePending)} tone="text-amber-600" />
             <Stat label="Expenses" value={inr(monthly.totalExpenses)} tone="text-red-600" />
-            <Stat
-              label="Net"
-              value={inr(monthly.netSurplusDeficit)}
-              tone={monthly.netSurplusDeficit >= 0 ? 'text-emerald-600' : 'text-red-600'}
-            />
+            <Stat label="Net" value={inr(monthly.netSurplusDeficit)} tone={monthly.netSurplusDeficit >= 0 ? 'text-emerald-600' : 'text-red-600'} />
           </div>
-
-          <h3 className="mb-2 mt-6 text-sm font-semibold text-gray-700">Income vs Expense</h3>
-          <table className="w-full text-sm">
-            <tbody>
-              <tr className="border-b">
-                <td className="py-2 text-gray-600">Maintenance Income</td>
-                <td className="py-2 text-right font-medium text-emerald-600">
-                  {inr(monthly.maintenanceCollected)}
-                </td>
-              </tr>
-              <tr className="border-b">
-                <td className="py-2 text-gray-600">Total Expenses</td>
-                <td className="py-2 text-right font-medium text-red-600">
-                  {inr(monthly.totalExpenses)}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2 font-semibold">Net Surplus / Deficit</td>
-                <td className="py-2 text-right font-bold">{inr(monthly.netSurplusDeficit)}</td>
-              </tr>
-            </tbody>
-          </table>
-
           {monthly.expenseBreakdown?.length > 0 && (
             <>
               <h3 className="mb-2 mt-6 text-sm font-semibold text-gray-700">Expense Breakdown</h3>
@@ -148,30 +160,24 @@ export default function FinancialReports() {
         </div>
       )}
 
-      {/* Annual Balance Sheet */}
       {annual && (
         <div className="card">
           <SectionTitle
             title={`Annual Balance Sheet — ${annual.year}`}
             action={
-              <button className="btn-success" onClick={shareAnnual}>
-                Share on WhatsApp
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-secondary" onClick={downloadAnnual}>Download</button>
+                <button className="btn-success" onClick={shareAnnual}>Share on WhatsApp</button>
+              </div>
             }
           />
           <div className="grid gap-4 sm:grid-cols-4">
             <Stat label="Opening" value={inr(annual.openingBalance)} />
             <Stat label="Income" value={inr(annual.totalIncome)} tone="text-emerald-600" />
             <Stat label="Expenses" value={inr(annual.totalExpenses)} tone="text-red-600" />
-            <Stat
-              label="Closing"
-              value={inr(annual.closingBalance)}
-              tone={annual.closingBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}
-            />
+            <Stat label="Closing" value={inr(annual.closingBalance)} tone={annual.closingBalance >= 0 ? 'text-emerald-600' : 'text-red-600'} />
           </div>
-
-          <h3 className="mb-2 mt-6 text-sm font-semibold text-gray-700">Month-wise Summary</h3>
-          <div className="overflow-x-auto">
+          <div className="mt-6 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-gray-500">
@@ -191,19 +197,8 @@ export default function FinancialReports() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="border-t-2 font-semibold">
-                  <td className="py-2 pr-4">Total</td>
-                  <td className="py-2 pr-4 text-right text-emerald-600">{inr(annual.totalIncome)}</td>
-                  <td className="py-2 pr-4 text-right text-red-600">{inr(annual.totalExpenses)}</td>
-                  <td className="py-2 pr-4 text-right">{inr(annual.totalIncome - annual.totalExpenses)}</td>
-                </tr>
-              </tfoot>
             </table>
           </div>
-          <p className="mt-3 text-sm text-gray-500">
-            Outstanding dues for {annual.year}: <span className="font-semibold text-amber-600">{inr(annual.pendingDues)}</span>
-          </p>
         </div>
       )}
     </div>

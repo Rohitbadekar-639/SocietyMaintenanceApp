@@ -91,12 +91,13 @@ export default function Navbar() {
             {isAuthenticated ? (
               <>
                 <Link to={isAdmin ? '/admin' : '/member'} onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">My dashboard</Link>
+                <Link to="/reports" onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">Reports</Link>
                 <button onClick={handleLogout} className="btn-secondary mt-2">Sign out</button>
               </>
             ) : (
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <Link to="/login" onClick={() => setOpen(false)} className="btn-secondary">Sign in</Link>
-                <Link to="/register" onClick={() => setOpen(false)} className="btn-primary !bg-orange-500 hover:!bg-orange-600">Start free</Link>
+                <Link to="/register-member" onClick={() => setOpen(false)} className="btn-primary !bg-orange-500 hover:!bg-orange-600">Member signup</Link>
               </div>
             )}
           </div>

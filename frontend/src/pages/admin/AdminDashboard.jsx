@@ -6,12 +6,20 @@ import MemberDirectory from './MemberDirectory'
 import MaintenanceTracker from './MaintenanceTracker'
 import ExpenseLogger from './ExpenseLogger'
 import NoticeBoard from './NoticeBoard'
+import CommitteeDirectory from './CommitteeDirectory'
+import SocietyAccounts from './SocietyAccounts'
+import AuditDocuments from './AuditDocuments'
+import PaymentClaims from './PaymentClaims'
 
 const tabs = [
   { id: 'overview', label: 'Overview', icon: '⌂', component: Overview },
   { id: 'members', label: 'Members', icon: '♙', component: MemberDirectory },
+  { id: 'committee', label: 'Committee', icon: '★', component: CommitteeDirectory },
   { id: 'maintenance', label: 'Maintenance', icon: '₹', component: MaintenanceTracker },
-  { id: 'expenses', label: 'Expenses', icon: '▤', component: ExpenseLogger },
+  { id: 'claims', label: 'Payment claims', icon: '✓', component: PaymentClaims },
+  { id: 'accounts', label: 'Bank accounts', icon: '🏦', component: SocietyAccounts },
+  { id: 'audit', label: 'Audit reports', icon: '▤', component: AuditDocuments },
+  { id: 'expenses', label: 'Expenses', icon: '▣', component: ExpenseLogger },
   { id: 'notices', label: 'Notices & rules', icon: '◉', component: NoticeBoard },
 ]
 
@@ -19,8 +27,6 @@ export default function AdminDashboard() {
   const { user } = useAuth()
   const [active, setActive] = useState('overview')
 
-  // Defense in depth: the router guards this page and the API enforces RBAC;
-  // this protects direct component use as well.
   if (!getValidToken()) return <Navigate to="/login" replace />
   if (user?.role !== 'ADMIN') return <Navigate to="/member" replace />
 
@@ -32,7 +38,7 @@ export default function AdminDashboard() {
         <div className="border-b border-slate-100 px-3 pb-4 pt-2">
           <p className="text-xs font-bold uppercase tracking-[.14em] text-slate-400">Committee workspace</p>
           <p className="mt-2 truncate text-sm font-bold text-slate-900">{user?.fullName}</p>
-          <p className="mt-0.5 text-xs text-slate-500">Administrator access</p>
+          <p className="mt-0.5 text-xs text-slate-500">Admin · Secretary / Chairman</p>
         </div>
         <nav className="mt-3 grid gap-1">
           {tabs.map((tab) => (
@@ -42,11 +48,6 @@ export default function AdminDashboard() {
             </button>
           ))}
         </nav>
-        <div className="mt-6 rounded-xl bg-slate-950 p-4 text-white">
-          <p className="text-xs font-bold uppercase tracking-[.12em] text-orange-300">Need help?</p>
-          <p className="mt-2 text-sm font-semibold">Set up your society in minutes.</p>
-          <p className="mt-1 text-xs leading-5 text-slate-300">Add members first, then begin tracking their maintenance.</p>
-        </div>
       </aside>
       <section className="min-w-0">
         <div className="mb-6 flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
@@ -54,7 +55,7 @@ export default function AdminDashboard() {
             <p className="text-xs font-bold uppercase tracking-[.14em] text-orange-600">SocietyWale admin</p>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{tabs.find((tab) => tab.id === active).label}</h1>
           </div>
-          <p className="text-sm text-slate-500">Your committee workspace is private and role controlled.</p>
+          <p className="text-sm text-slate-500">Members can view. Only admins can create or change records.</p>
         </div>
         <ActiveComponent onNavigate={setActive} />
       </section>
@@ -64,17 +65,16 @@ export default function AdminDashboard() {
 
 function Overview({ onNavigate }) {
   const steps = [
-    ['1', 'Add your members', 'Create the resident directory flat by flat.', 'members'],
-    ['2', 'Record maintenance', 'Add paid and pending maintenance for each flat.', 'maintenance'],
-    ['3', 'Keep members informed', 'Publish notices, rules and financial updates.', 'notices'],
+    ['1', 'Publish committee', 'Add chairman, secretary and treasurer contacts.', 'committee'],
+    ['2', 'Add bank account', 'Members need account details to pay maintenance.', 'accounts'],
+    ['3', 'Track maintenance', 'Record dues and approve member payment claims.', 'maintenance'],
   ]
 
   return (
     <div className="space-y-6">
       <div className="rounded-3xl bg-[linear-gradient(135deg,#102A43_0%,#173e62_55%,#0f766e_150%)] p-7 text-white sm:p-9">
-        <p className="text-xs font-bold uppercase tracking-[.15em] text-orange-300">A clear place to start</p>
-        <h2 className="mt-3 max-w-xl text-2xl font-extrabold leading-tight sm:text-3xl">Set up the essentials once. Keep your society work organised every month.</h2>
-        <p className="mt-4 max-w-xl text-sm leading-6 text-slate-200">SocietyWale is designed around the daily jobs a committee actually does — no complex configuration needed.</p>
+        <p className="text-xs font-bold uppercase tracking-[.15em] text-orange-300">Committee control</p>
+        <h2 className="mt-3 max-w-xl text-2xl font-extrabold leading-tight sm:text-3xl">Admins manage. Members view, download and notify payments.</h2>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         {steps.map(([number, title, copy, target]) => (
@@ -82,15 +82,9 @@ function Overview({ onNavigate }) {
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-orange-50 text-sm font-extrabold text-orange-600">{number}</span>
             <h3 className="mt-4 font-bold text-slate-950">{title}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">{copy}</p>
-            <button onClick={() => onNavigate(target)} className="mt-5 text-sm font-bold text-orange-600 hover:text-orange-700">Open {title.toLowerCase()} →</button>
+            <button onClick={() => onNavigate(target)} className="mt-5 text-sm font-bold text-orange-600 hover:text-orange-700">Open →</button>
           </article>
         ))}
-      </div>
-      <div className="card">
-        <p className="text-xs font-bold uppercase tracking-[.14em] text-slate-400">Financial discipline</p>
-        <h3 className="mt-2 text-lg font-bold text-slate-950">Review your income, expenses and collection status from one reporting view.</h3>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Once maintenance and expenses are recorded, reports are available for the committee to review and share.</p>
-        <button onClick={() => onNavigate('maintenance')} className="btn-secondary mt-5 !py-2">Go to maintenance</button>
       </div>
     </div>
   )

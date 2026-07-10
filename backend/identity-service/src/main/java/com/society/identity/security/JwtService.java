@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 
 @Service
@@ -27,14 +28,15 @@ public class JwtService {
     public String generateToken(User user) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("email", user.getEmail() == null ? "" : user.getEmail());
+        claims.put("role", user.getRole().name());
+        claims.put("societyId", user.getSocietyId().toString());
+        claims.put("name", user.getFullName());
+        claims.put("flatNumber", user.getFlatNumber() == null ? "" : user.getFlatNumber());
         return Jwts.builder()
                 .subject(user.getId().toString())
-                .claims(Map.of(
-                        "email", user.getEmail() == null ? "" : user.getEmail(),
-                        "role", user.getRole().name(),
-                        "societyId", user.getSocietyId().toString(),
-                        "name", user.getFullName()
-                ))
+                .claims(claims)
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(key)
