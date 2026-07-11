@@ -1,0 +1,48 @@
+# Render Blueprint — SocietyWale backends (Docker)
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Create TWO Web Services from this repo (or use Blueprint).
+# Free tier sleeps after idle; first request after sleep can take 30–60s (Spring Boot cold start).
+
+services:
+  - type: web
+    name: societywale-identity
+    runtime: docker
+    plan: free
+    rootDir: backend/identity-service
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: JWT_SECRET
+        sync: false
+      - key: DB_URL
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: APP_CORS_ORIGINS
+        sync: false
+
+  - type: web
+    name: societywale-core
+    runtime: docker
+    plan: free
+    rootDir: backend/core-service
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: JWT_SECRET
+        sync: false
+      - key: DB_URL
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: APP_CORS_ORIGINS
+        sync: false

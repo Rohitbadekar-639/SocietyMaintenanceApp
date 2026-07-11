@@ -1,288 +1,292 @@
-# Deploy SocietyWale — Vercel + Railway + Neon
+# Deploy SocietyWale — Vercel (frontend) + Render (backend Docker) + Neon (DB)
 
-One **GitHub monorepo**. No separate repos needed.
+One **GitHub monorepo**. Custom domain: **SocietyWale.in** (GoDaddy).
 
 ```
-SocietyMaintenanceApp/          ← single GitHub repo
-├── frontend/                   → Vercel
-├── backend/identity-service/   → Railway service #1
-├── backend/core-service/       → Railway service #2
-└── neon/init.sql               → run once in Neon
+SocietyMaintenanceApp/                 ← single GitHub repo
+├── frontend/                          → Vercel (+ SocietyWale.in)
+├── backend/identity-service/          → Render Web Service (Docker)
+├── backend/core-service/              → Render Web Service (Docker)
+├── render.yaml                        → optional Render blueprint
+└── neon/                              → SQL scripts for Neon
 ```
 
-| Layer | Platform | Cost |
-|-------|----------|------|
-| Frontend | **Vercel** | Free |
-| Backend (2 services) | **Railway** | Trial / hobby credits |
-| Database | **Neon PostgreSQL** | Free |
-| Auth | **JWT in identity-service** | Built-in (no extra service) |
+| Layer | Platform | Notes |
+|-------|----------|--------|
+| Frontend | **Vercel** (free) | SPA + custom domain |
+| Backend ×2 | **Render** Docker (free) | Sleeps when idle; cold start ~30–60s |
+| Database | **Neon** PostgreSQL (free) | One DB is fine (`Societywale`) |
+| Domain | **GoDaddy** → point to Vercel | Apex + `www` |
 
 ---
 
-## Before you start
+## A) GitHub email ≠ Vercel/Render email (important)
 
-- [ ] GitHub account
-- [ ] [Vercel](https://vercel.com) account (login with GitHub)
-- [ ] [Railway](https://railway.app) account (login with GitHub)
-- [ ] [Neon](https://neon.tech) account
-- [ ] Project pushed to GitHub
+You do **not** need the same Gmail on GitHub, Vercel, and Render.
 
-Generate JWT secret (Windows PowerShell):
+What matters is: **which GitHub account owns / can access the repo**.
+
+### Recommended (simplest)
+
+1. Keep the repo on GitHub (`himanshu2devi/SocietyMaintenanceApp` or wherever it lives).
+2. Sign into **Vercel** and **Render** with `rohitbadekar3@gmail.com`.
+3. In each product, **connect GitHub** and authorize access to that repo:
+   - **Vercel** → Settings → Git → Connect GitHub → grant access to `SocietyMaintenanceApp`
+   - **Render** → Account Settings → GitHub → Connect / Configure → allow that repo
+4. If the repo is under `himanshu2devi` and you signed into GitHub as someone else during OAuth, either:
+   - Log into GitHub as `himanshu2devi` when Vercel/Render asks to authorize, **or**
+   - Invite `rohitbadekar3`’s GitHub user as a collaborator on the repo, **or**
+   - Transfer / mirror the repo to a GitHub account you control with the new email.
+
+### Alternative
+
+Create a new GitHub account with `rohitbadekar3@gmail.com`, push this project there, then import **that** repo into Vercel and Render.
+
+---
+
+## B) Before deploy
+
+- [ ] Code pushed to GitHub (`main`)
+- [ ] Neon project ready (you already use `Societywale`)
+- [ ] Same `JWT_SECRET` for **both** Render services
+- [ ] Vercel + Render accounts created
+
+Generate a strong JWT secret (PowerShell):
 
 ```powershell
 cd C:\Z_Business\society-app\SocietyMaintenanceApp
 .\scripts\generate-secrets.ps1
 ```
 
-Save the `JWT_SECRET` — use the **same value** on both Railway services.
-
----
-
-## STEP 1 — Push code to GitHub
+Or:
 
 ```powershell
-cd C:\Z_Business\society-app\SocietyMaintenanceApp
-git init
-git add .
-git commit -m "SocietyWale MVP - Vercel Railway Neon"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/SocietyMaintenanceApp.git
-git push -u origin main
+[Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }) -as [byte[]])
 ```
 
 ---
 
-## STEP 2 — Neon PostgreSQL (database)
+## C) Neon database
 
-1. Go to [console.neon.tech](https://console.neon.tech) → **New Project**
-   - Name: `SocietyWale`
-   - Region: pick closest to you (e.g. AWS Asia Pacific)
+You already run **one** Neon database (`Societywale`) for both services. Keep that for free tier.
 
-2. Open **SQL Editor** → paste and run `neon/init.sql`:
+Ensure migrations / tables exist (run any pending `neon/V*.sql` in Neon SQL Editor if not already applied).
 
-```sql
-CREATE DATABASE identity_db;
-CREATE DATABASE core_db;
-```
-
-3. **Dashboard** → **Connection details** for each database.
-
-Build two JDBC URLs (note `/identity_db` and `/core_db`):
+JDBC URL shape (pooler recommended):
 
 ```
-jdbc:postgresql://ep-xxxx.region.aws.neon.tech/identity_db?sslmode=require
-jdbc:postgresql://ep-xxxx.region.aws.neon.tech/core_db?sslmode=require
+jdbc:postgresql://ep-xxxx-pooler.region.aws.neon.tech/Societywale?sslmode=require
 ```
 
 Save:
 
-| Key | Example |
-|-----|---------|
-| `DB_USER` | `neondb_owner` |
-| `DB_PASSWORD` | (from Neon) |
-| `IDENTITY_DB_URL` | jdbc URL ending in `/identity_db?sslmode=require` |
-| `CORE_DB_URL` | jdbc URL ending in `/core_db?sslmode=require` |
+| Key | Value |
+|-----|--------|
+| `DB_URL` | JDBC URL above |
+| `DB_USER` | Neon user (e.g. `neondb_owner`) |
+| `DB_PASSWORD` | Neon password |
+
+**Use the same `DB_*` on both Render services** (same DB).
 
 ---
 
-## STEP 3 — Railway: Identity Service
+## D) Render — Identity service (Docker)
 
-1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
-2. Select `SocietyMaintenanceApp`
-3. Open the new service → **Settings**:
+You are already on **New Web Service**. Fill it like this:
 
-| Setting | Value |
-|---------|-------|
-| Service name | `identity-service` |
-| Root Directory | `backend/identity-service` |
+| Field | Value |
+|-------|--------|
+| Source | GitHub repo `SocietyMaintenanceApp` |
+| Name | `societywale-identity` |
+| Language | **Docker** |
+| Branch | `main` |
+| **Root Directory** | `backend/identity-service` |
+| Region | Singapore / closest to you |
+| Instance | Free |
 
-4. **Variables** tab → add:
+Then open **Environment** and add:
 
-| Variable | Value |
-|----------|-------|
+| Key | Value |
+|-----|--------|
 | `SPRING_PROFILES_ACTIVE` | `prod` |
-| `JWT_SECRET` | (from generate-secrets.ps1) |
-| `DB_URL` | Neon JDBC URL for **identity_db** |
+| `JWT_SECRET` | *(same secret on both services)* |
+| `DB_URL` | Neon JDBC URL |
 | `DB_USER` | Neon username |
 | `DB_PASSWORD` | Neon password |
-| `APP_CORS_ORIGINS` | `http://localhost:5173` (update after Vercel deploy) |
+| `APP_CORS_ORIGINS` | `https://societywale.in,https://www.societywale.in,http://localhost:5173` |
 
-5. **Settings** → **Networking** → **Generate Domain**
+(You can temporarily use only your Vercel URL first, then add the custom domain.)
 
-Copy URL, e.g.:
+Deploy → wait for build (Maven Docker build can take several minutes).
 
-```
-https://identity-service-production-a1b2.up.railway.app
-```
-
-6. Wait for deploy to finish (green). Test:
+Copy public URL, e.g.:
 
 ```
-https://YOUR-IDENTITY-URL.up.railway.app/actuator/health
+https://societywale-identity.onrender.com
 ```
 
-Should return `{"status":"UP"}`.
+Health check:
+
+```
+https://societywale-identity.onrender.com/actuator/health
+```
+
+Expect `{"status":"UP"}`.
 
 ---
 
-## STEP 4 — Railway: Core Service
+## E) Render — Core service (Docker)
 
-Same Railway project → **+ Create** → **GitHub Repo** → select same repo again.
+**New Web Service** again from the **same** repo:
 
-| Setting | Value |
-|---------|-------|
-| Service name | `core-service` |
-| Root Directory | `backend/core-service` |
+| Field | Value |
+|-------|--------|
+| Name | `societywale-core` |
+| Language | **Docker** |
+| **Root Directory** | `backend/core-service` |
+| Branch | `main` |
+| Instance | Free |
 
-**Variables:**
+Same env vars as identity (`JWT_SECRET` **must match**):
 
-| Variable | Value |
-|----------|-------|
+| Key | Value |
+|-----|--------|
 | `SPRING_PROFILES_ACTIVE` | `prod` |
-| `JWT_SECRET` | **Same as identity-service** |
-| `DB_URL` | Neon JDBC URL for **core_db** |
-| `DB_USER` | Neon username |
-| `DB_PASSWORD` | Neon password |
-| `APP_CORS_ORIGINS` | `http://localhost:5173` (update after Vercel) |
+| `JWT_SECRET` | *identical to identity* |
+| `DB_URL` | same Neon JDBC URL |
+| `DB_USER` | same |
+| `DB_PASSWORD` | same |
+| `APP_CORS_ORIGINS` | same list as identity |
 
-**Networking** → **Generate Domain**:
-
-```
-https://core-service-production-c3d4.up.railway.app
-```
-
-Test:
+Health:
 
 ```
-https://YOUR-CORE-URL.up.railway.app/actuator/health
+https://societywale-core.onrender.com/actuator/health
 ```
 
 ---
 
-## STEP 5 — Vercel: Frontend
+## F) Vercel — Frontend
 
-1. [vercel.com](https://vercel.com) → **Add New Project** → import `SocietyMaintenanceApp`
+1. [vercel.com](https://vercel.com) → **Add New Project** → Import `SocietyMaintenanceApp`
+2. Configure:
 
 | Setting | Value |
-|---------|-------|
+|---------|--------|
 | Framework Preset | Vite |
-| Root Directory | `frontend` |
+| **Root Directory** | `frontend` |
 | Build Command | `npm run build` |
 | Output Directory | `dist` |
 
-2. **Environment Variables** (Production):
+3. **Environment Variables** (Production + Preview):
 
 | Name | Value |
-|------|-------|
-| `VITE_IDENTITY_URL` | `https://YOUR-IDENTITY-URL.up.railway.app/api/v1` |
-| `VITE_CORE_URL` | `https://YOUR-CORE-URL.up.railway.app/api/v1` |
+|------|--------|
+| `VITE_IDENTITY_URL` | `https://societywale-identity.onrender.com/api/v1` |
+| `VITE_CORE_URL` | `https://societywale-core.onrender.com/api/v1` |
 
-No trailing slash.
+No trailing slash after `v1`.
 
-3. Click **Deploy**
+4. Deploy → copy URL, e.g. `https://society-maintenance-app.vercel.app`
 
-4. Copy your Vercel URL:
-
-```
-https://society-maintenance-app.vercel.app
-```
+5. Update **both** Render services `APP_CORS_ORIGINS` to include that Vercel URL, then redeploy / wait for auto restart.
 
 ---
 
-## STEP 6 — Fix CORS (both Railway services)
+## G) Custom domain SocietyWale.in (GoDaddy → Vercel)
 
-Go to **identity-service** and **core-service** on Railway → **Variables**:
+Do this **after** frontend works on `*.vercel.app`.
 
-Update:
+### On Vercel
+
+1. Project → **Settings** → **Domains**
+2. Add:
+   - `societywale.in`
+   - `www.societywale.in`
+3. Vercel shows DNS records to create (usually):
+   - **A** record for apex `@` → `76.76.21.21` (Vercel’s current IP — use what Vercel shows)
+   - **CNAME** for `www` → `cname.vercel-dns.com` (use exact target Vercel shows)
+
+### On GoDaddy
+
+1. GoDaddy → **My Products** → **DNS** for `SocietyWale.in`
+2. Remove conflicting A / CNAME / parking / forwarding records for `@` and `www`
+3. Add the records **exactly** as Vercel instructs
+4. Wait for DNS (often 5–60 minutes; can be up to 24–48h)
+
+### After domain is live
+
+Update Render CORS again:
 
 ```
-APP_CORS_ORIGINS=https://society-maintenance-app.vercel.app,http://localhost:5173
+APP_CORS_ORIGINS=https://societywale.in,https://www.societywale.in,https://YOUR-APP.vercel.app,http://localhost:5173
 ```
 
-Use your exact Vercel URL. Railway redeploys automatically.
+Optional: in Vercel Domains, set `societywale.in` as primary and redirect `www` → apex (or the reverse).
 
 ---
 
-## STEP 7 — Test live
+## H) End-to-end checklist
 
-Open your Vercel URL:
+1. Identity health UP  
+2. Core health UP  
+3. Open Vercel URL → Register society / Login  
+4. Admin + member flows work  
+5. Attach `societywale.in`  
+6. Test on custom domain  
+7. CORS updated for custom domain  
 
-1. **Register Society** — creates admin account
-2. **Login**
-3. **Add member**
-4. **Maintenance** — mark paid/pending
-5. **Expenses** — add expense
-6. **Notices** — post announcement
-7. **Reports** — generate monthly report
+### Redeploy
 
-### Troubleshooting
+- Push to `main` → Vercel and Render auto-deploy if connected.
+
+### Free-tier notes
+
+| Topic | Reality |
+|-------|---------|
+| Render free | Services **sleep** when idle; first hit is slow |
+| Neon free | One DB; may suspend inactive projects |
+| Vercel free | Fine for this SPA |
+| Production later | Paid Render / always-on JVM if customers complain about cold starts |
+
+---
+
+## Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
-| CORS error in browser (F12) | `APP_CORS_ORIGINS` must exactly match Vercel URL |
-| 502 / app not loading on Railway | Check deploy logs; verify `DB_URL`, `DB_USER`, `DB_PASSWORD` |
-| Login works locally but not live | `JWT_SECRET` must match on both Railway services |
-| Blank page on Vercel | Check build logs; verify env vars set before deploy |
-| API 404 | `VITE_*_URL` must include `/api/v1` at the end |
-| Railway build fails | Open logs; ensure Root Directory is correct |
-| DB connection error | JDBC URL must end with `?sslmode=require` for Neon |
-
-### Redeploy after code changes
-
-- **Frontend:** push to GitHub → Vercel auto-deploys
-- **Backend:** push to GitHub → Railway auto-deploys both services
-
----
-
-## Environment variable cheat sheet
-
-### Identity Service (Railway)
-
-```
-SPRING_PROFILES_ACTIVE=prod
-JWT_SECRET=<same-on-both-services>
-DB_URL=jdbc:postgresql://ep-xxx.neon.tech/identity_db?sslmode=require
-DB_USER=neondb_owner
-DB_PASSWORD=<neon-password>
-APP_CORS_ORIGINS=https://your-app.vercel.app,http://localhost:5173
-```
-
-### Core Service (Railway)
-
-```
-SPRING_PROFILES_ACTIVE=prod
-JWT_SECRET=<same-on-both-services>
-DB_URL=jdbc:postgresql://ep-xxx.neon.tech/core_db?sslmode=require
-DB_USER=neondb_owner
-DB_PASSWORD=<neon-password>
-APP_CORS_ORIGINS=https://your-app.vercel.app,http://localhost:5173
-```
-
-### Frontend (Vercel)
-
-```
-VITE_IDENTITY_URL=https://identity-xxx.up.railway.app/api/v1
-VITE_CORE_URL=https://core-xxx.up.railway.app/api/v1
-```
+| Render build fails | Logs → Root Directory must be `backend/identity-service` or `backend/core-service` |
+| Health never green | Check `DB_URL` / password; ensure `sslmode=require` |
+| CORS errors | `APP_CORS_ORIGINS` must include exact frontend origin (`https://societywale.in`) |
+| Login fails live | Same `JWT_SECRET` on both services |
+| Frontend calls localhost | Set `VITE_*` in Vercel and **redeploy** (env is baked in at build time) |
+| Domain not resolving | Wait on DNS; disable GoDaddy forwarding; use Vercel DNS values only |
+| Blank `about:blank` PDF | Already fixed — use latest frontend with jsPDF download |
+| GitHub repo not listed | Connect correct GitHub account / grant Vercel-Render access to the repo |
 
 ---
 
 ## Local development (unchanged)
 
 ```powershell
-# Terminal 1
-cd backend/identity-service
-mvn spring-boot:run
+# Neon env for backends
+.\scripts\start-backend-neon.ps1 -Service identity
+.\scripts\start-backend-neon.ps1 -Service core
 
-# Terminal 2
-cd backend/core-service
-mvn spring-boot:run
-
-# Terminal 3
 cd frontend
-copy .env.example .env
-npm install
 npm run dev
 ```
 
 Open http://localhost:5173
+
+---
+
+## Files added for this deploy path
+
+| File | Purpose |
+|------|---------|
+| `backend/identity-service/Dockerfile` | Identity Docker image |
+| `backend/core-service/Dockerfile` | Core Docker image |
+| `render.yaml` | Optional Render blueprint |
+| `frontend/vercel.json` | SPA rewrites for Vite |
+| `frontend/.env.production.example` | Env template for Vercel |
