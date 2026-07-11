@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Brand } from './Brand'
 
@@ -8,6 +8,10 @@ const publicLinks = [
   { to: '/about', label: 'About us' },
   { to: '/contact', label: 'Contact' },
 ]
+
+function navClass() {
+  return 'rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950'
+}
 
 export default function Navbar() {
   const { isAuthenticated, isAdmin, user, logout } = useAuth()
@@ -19,11 +23,6 @@ export default function Navbar() {
     navigate('/login')
   }
 
-  const linkClass = ({ isActive }) =>
-    `rounded-lg px-3 py-2 text-sm font-semibold transition ${
-      isActive ? 'text-slate-950' : 'text-slate-500 hover:text-slate-950'
-    }`
-
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl">
       <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-4 sm:px-6">
@@ -31,20 +30,20 @@ export default function Navbar() {
 
         <nav className="hidden items-center gap-1 md:flex">
           {publicLinks.map((l) => (
-            <NavLink key={l.to} to={l.to} className={linkClass}>
+            <Link key={l.to} to={l.to} className={navClass()}>
               {l.label}
-            </NavLink>
+            </Link>
           ))}
 
           {isAuthenticated && (
-            <NavLink to={isAdmin ? '/admin' : '/member'} className={linkClass}>
+            <Link to={isAdmin ? '/admin' : '/member'} className={navClass()}>
               Dashboard
-            </NavLink>
+            </Link>
           )}
           {isAuthenticated && (
-            <NavLink to="/reports" className={linkClass}>
+            <Link to="/reports" className={navClass()}>
               Reports
-            </NavLink>
+            </Link>
           )}
         </nav>
 

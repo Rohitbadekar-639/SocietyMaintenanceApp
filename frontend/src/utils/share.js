@@ -1,7 +1,13 @@
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
+
 const monthNames = [
   '', 'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
+
+/** Idle logout: 30 minutes of inactivity. */
+export const IDLE_LOGOUT_MS = 30 * 60 * 1000
 
 export function monthName(m) {
   return monthNames[m] || m
@@ -11,10 +17,29 @@ export function inr(value) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`
 }
 
+/** PDF-safe currency (Helvetica has no rupee glyph). */
+function inrPdf(value) {
+  return `Rs. ${Number(value || 0).toLocaleString('en-IN')}`
+}
+
+export function formatNoticeDate(value) {
+  if (!value) return '—'
+  try {
+    return new Date(value).toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return String(value)
+  }
+}
+
 /**
  * Build a WhatsApp deep link. Passing no phone number opens WhatsApp's
  * contact chooser, so the sender never has to save a contact number.
- * Optionally pass a phone (with country code, digits only) to target a chat.
  */
 export function whatsappLink(text, phone) {
   const encoded = encodeURIComponent(text)
@@ -23,63 +48,145 @@ export function whatsappLink(text, phone) {
     : `https://wa.me/?text=${encoded}`
 }
 
-export function buildMonthlyReportText(society, report) {
-  const lines = [
-    `*${society || 'Society'} — Monthly Report*`,
-    `Period: ${monthName(report.month)} ${report.year}`,
-    '',
-    `Maintenance Collected: ${inr(report.maintenanceCollected)}`,
-    `Maintenance Pending: ${inr(report.maintenancePending)}`,
-    `Total Expenses: ${inr(report.totalExpenses)}`,
-    `Net (Surplus/Deficit): ${inr(report.netSurplusDeficit)}`,
-  ]
-  if (report.expenseBreakdown?.length) {
-    lines.push('', '*Expense Breakdown:*')
-    report.expenseBreakdown.forEach((c) => lines.push(`- ${c.category}: ${inr(c.amount)}`))
-  }
-  lines.push('', 'Shared via SocietyWale')
-  return lines.join('\n')
-}
-
-export function buildAnnualReportText(society, sheet) {
+export function buildNoticeWhatsAppText(notice, societyName = 'Society') {
   return [
-    `*${society || 'Society'} — Annual Balance Sheet ${sheet.year}*`,
+    `*${societyName} — Notice*`,
     '',
-    `Opening Balance: ${inr(sheet.openingBalance)}`,
-    `Total Income: ${inr(sheet.totalIncome)}`,
-    `Total Expenses: ${inr(sheet.totalExpenses)}`,
-    `Closing Balance: ${inr(sheet.closingBalance)}`,
-    `Outstanding Dues: ${inr(sheet.pendingDues)}`,
+    `*${notice.title}*`,
+    notice.body,
+    '',
+    `Priority: ${notice.priority || 'NORMAL'}`,
+    `Date: ${formatNoticeDate(notice.createdAt)}`,
+    notice.createdByName ? `Posted by: ${notice.createdByName}` : null,
     '',
     'Shared via SocietyWale',
-  ].join('\n')
+  ].filter(Boolean).join('\n')
 }
 
-export function downloadTextFile(filename, text) {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
+function startPdfDoc(title) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const margin = 48
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(234, 88, 12)
+  doc.text('SOCIETYWALE', margin, 48)
+
+  doc.setFontSize(18)
+  doc.setTextColor(15, 23, 42)
+  doc.text(title, margin, 76)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.setTextColor(100, 116, 139)
+  doc.text(`Generated ${new Date().toLocaleString('en-IN')}`, margin, 94)
+  return { doc, margin, y: 118 }
 }
 
-export function downloadReportAsPdf(title, bodyHtml) {
-  const win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700')
-  if (!win) return
-  win.document.write(`<!doctype html><html><head><title>${title}</title>
-    <style>
-      body{font-family:Segoe UI,Arial,sans-serif;padding:32px;color:#0f172a}
-      h1{font-size:22px;margin:0 0 8px} p{color:#64748b}
-      table{width:100%;border-collapse:collapse;margin-top:16px}
-      th,td{border-bottom:1px solid #e2e8f0;padding:8px;text-align:left}
-      .right{text-align:right}
-    </style></head><body>
-    <h1>${title}</h1>
-    <p>SocietyWale financial report · ${new Date().toLocaleString()}</p>
-    ${bodyHtml}
-    <script>window.onload=()=>{window.print()}</script>
-    </body></html>`)
-  win.document.close()
+function addFooter(doc) {
+  const pageCount = doc.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i += 1) {
+    doc.setPage(i)
+    doc.setFontSize(9)
+    doc.setTextColor(148, 163, 184)
+    doc.text(
+      'Confidential society financial report · SocietyWale',
+      48,
+      doc.internal.pageSize.getHeight() - 28,
+    )
+  }
+}
+
+/** Direct .pdf file download — no popup / print dialog. */
+export function downloadMonthlyReportPdf(report, filename) {
+  const title = `Monthly Income & Expense — ${monthName(report.month)} ${report.year}`
+  const { doc, margin, y } = startPdfDoc(title)
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    head: [['Metric', 'Amount']],
+    body: [
+      ['Maintenance collected', inrPdf(report.maintenanceCollected)],
+      ['Maintenance pending', inrPdf(report.maintenancePending)],
+      ['Total expenses', inrPdf(report.totalExpenses)],
+      ['Net (surplus / deficit)', inrPdf(report.netSurplusDeficit)],
+    ],
+    headStyles: { fillColor: [15, 42, 67], textColor: 255 },
+    styles: { fontSize: 10, cellPadding: 8 },
+    columnStyles: { 1: { halign: 'right' } },
+  })
+
+  let nextY = doc.lastAutoTable.finalY + 22
+  if (report.expenseBreakdown?.length) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.setTextColor(15, 23, 42)
+    doc.text('Expense breakdown', margin, nextY)
+    autoTable(doc, {
+      startY: nextY + 10,
+      margin: { left: margin, right: margin },
+      theme: 'striped',
+      head: [['Category', 'Amount']],
+      body: report.expenseBreakdown.map((c) => [c.category, inrPdf(c.amount)]),
+      headStyles: { fillColor: [234, 88, 12], textColor: 255 },
+      styles: { fontSize: 10, cellPadding: 7 },
+      columnStyles: { 1: { halign: 'right' } },
+    })
+  }
+
+  addFooter(doc)
+  doc.save(filename || `monthly-report-${report.year}-${report.month}.pdf`)
+}
+
+/** Direct .pdf file download — no popup / print dialog. */
+export function downloadAnnualReportPdf(sheet, filename) {
+  const title = `Annual Balance Sheet — ${sheet.year}`
+  const { doc, margin, y } = startPdfDoc(title)
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    head: [['Metric', 'Amount']],
+    body: [
+      ['Opening balance', inrPdf(sheet.openingBalance)],
+      ['Total income', inrPdf(sheet.totalIncome)],
+      ['Total expenses', inrPdf(sheet.totalExpenses)],
+      ['Closing balance', inrPdf(sheet.closingBalance)],
+      ['Outstanding dues', inrPdf(sheet.pendingDues)],
+    ],
+    headStyles: { fillColor: [15, 42, 67], textColor: 255 },
+    styles: { fontSize: 10, cellPadding: 8 },
+    columnStyles: { 1: { halign: 'right' } },
+  })
+
+  const nextY = doc.lastAutoTable.finalY + 22
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(15, 23, 42)
+  doc.text('Month-wise summary', margin, nextY)
+
+  autoTable(doc, {
+    startY: nextY + 10,
+    margin: { left: margin, right: margin },
+    theme: 'striped',
+    head: [['Month', 'Income', 'Expenses', 'Net']],
+    body: (sheet.monthlyLines || []).map((l) => [
+      monthName(l.month),
+      inrPdf(l.income),
+      inrPdf(l.expenses),
+      inrPdf(l.net),
+    ]),
+    headStyles: { fillColor: [234, 88, 12], textColor: 255 },
+    styles: { fontSize: 10, cellPadding: 7 },
+    columnStyles: {
+      1: { halign: 'right' },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+    },
+  })
+
+  addFooter(doc)
+  doc.save(filename || `annual-report-${sheet.year}.pdf`)
 }

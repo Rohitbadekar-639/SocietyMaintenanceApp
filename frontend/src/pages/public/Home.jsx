@@ -5,8 +5,8 @@ const features = [
   { icon: '₹', title: 'Maintenance collection', desc: 'Track paid and pending maintenance without chasing spreadsheets.' },
   { icon: '▤', title: 'Expense transparency', desc: 'Record every operational expense and give your committee one source of truth.' },
   { icon: '◉', title: 'Notice centre', desc: 'Publish important updates and society rules where every member can find them.' },
-  { icon: '↗', title: 'Clear reports', desc: 'Review monthly income, expenses and outstanding dues in a few clicks.' },
-  { icon: '◌', title: 'Member-ready updates', desc: 'Share concise report summaries on WhatsApp, without saving contacts.' },
+  { icon: '↗', title: 'Clear reports', desc: 'Review monthly income, expenses and outstanding dues, then download PDF statements.' },
+  { icon: '◌', title: 'Member-ready updates', desc: 'Residents view notices, dues and claims in a simple, role-based workspace.' },
 ]
 
 export default function Home() {

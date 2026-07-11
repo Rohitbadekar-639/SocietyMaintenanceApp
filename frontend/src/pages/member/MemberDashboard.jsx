@@ -13,7 +13,7 @@ import {
 } from '../../api/services'
 import { Alert, SectionTitle, StatusBadge } from '../../components/ui/Feedback'
 import { getApiErrorMessage } from '../../utils/apiError'
-import { inr, monthName, whatsappLink } from '../../utils/share'
+import { inr, monthName, whatsappLink, formatNoticeDate } from '../../utils/share'
 import { Link } from 'react-router-dom'
 
 const now = new Date()
@@ -448,7 +448,10 @@ export default function MemberDashboard() {
           <ul className="space-y-3">
             {notices.slice(0, 5).map((n) => (
               <li key={n.id} className="rounded-lg border border-gray-100 p-3">
-                <h4 className="font-semibold">{n.title}</h4>
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="font-semibold">{n.title}</h4>
+                  <span className="shrink-0 text-[11px] font-medium text-slate-400">{formatNoticeDate(n.createdAt)}</span>
+                </div>
                 <p className="mt-1 text-sm text-gray-600">{n.body}</p>
               </li>
             ))}

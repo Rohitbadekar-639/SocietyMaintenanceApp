@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { NoticeService, RuleService } from '../../api/services'
 import { Alert, SectionTitle } from '../../components/ui/Feedback'
+import { useToast } from '../../context/ToastContext'
+import { getApiErrorMessage } from '../../utils/apiError'
+import { buildNoticeWhatsAppText, formatNoticeDate, whatsappLink } from '../../utils/share'
 
 export default function NoticeBoard() {
+  const toast = useToast()
   const [notices, setNotices] = useState([])
   const [rules, setRules] = useState([])
   const [noticeForm, setNoticeForm] = useState({ title: '', body: '', priority: 'NORMAL' })
@@ -29,9 +33,10 @@ export default function NoticeBoard() {
     try {
       await NoticeService.create(noticeForm)
       setNoticeForm({ title: '', body: '', priority: 'NORMAL' })
+      toast.success('Notice posted.')
       await load()
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not post notice.')
+      setError(getApiErrorMessage(err, 'Could not post notice.'))
     }
   }
 
@@ -41,16 +46,21 @@ export default function NoticeBoard() {
     try {
       await RuleService.create(ruleForm)
       setRuleForm({ category: '', title: '', ruleText: '' })
+      toast.success('Rule added.')
       await load()
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not add rule.')
+      setError(getApiErrorMessage(err, 'Could not add rule.'))
     }
+  }
+
+  function shareNoticeWhatsApp(notice) {
+    window.open(whatsappLink(buildNoticeWhatsAppText(notice)), '_blank', 'noopener,noreferrer')
   }
 
   const priorityColor = {
     URGENT: 'bg-red-100 text-red-700',
     HIGH: 'bg-amber-100 text-amber-700',
-    NORMAL: 'bg-brand-50 text-brand-700',
+    NORMAL: 'bg-sky-50 text-sky-700',
     LOW: 'bg-gray-100 text-gray-600',
   }
 
@@ -139,15 +149,27 @@ export default function NoticeBoard() {
           <SectionTitle title="Notice Board" subtitle={`${notices.length} notices`} />
           <ul className="space-y-3">
             {notices.map((n) => (
-              <li key={n.id} className="rounded-lg border border-gray-100 p-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-semibold">{n.title}</h4>
-                  <span className={`badge ${priorityColor[n.priority] || ''}`}>{n.priority}</span>
+              <li key={n.id} className="rounded-xl border border-slate-100 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="font-semibold text-slate-950">{n.title}</h4>
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      {formatNoticeDate(n.createdAt)}
+                      {n.createdByName ? ` · ${n.createdByName}` : ''}
+                    </p>
+                  </div>
+                  <span className={`badge shrink-0 ${priorityColor[n.priority] || ''}`}>{n.priority}</span>
                 </div>
-                <p className="mt-1 text-sm text-gray-600">{n.body}</p>
-                <p className="mt-2 text-xs text-gray-400">
-                  {n.createdByName} · {new Date(n.createdAt).toLocaleString()}
-                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{n.body}</p>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="btn-success !py-1.5 !text-xs"
+                    onClick={() => shareNoticeWhatsApp(n)}
+                  >
+                    Share on WhatsApp
+                  </button>
+                </div>
               </li>
             ))}
             {notices.length === 0 && <p className="text-sm text-gray-400">No notices yet.</p>}
@@ -158,10 +180,10 @@ export default function NoticeBoard() {
           <SectionTitle title="Society Rules" subtitle={`${rules.length} rules`} />
           <ul className="space-y-3">
             {rules.map((r) => (
-              <li key={r.id} className="rounded-lg border border-gray-100 p-3">
-                <span className="badge bg-brand-50 text-brand-700">{r.category}</span>
-                <h4 className="mt-1 font-semibold">{r.title}</h4>
-                <p className="mt-1 text-sm text-gray-600">{r.ruleText}</p>
+              <li key={r.id} className="rounded-xl border border-slate-100 p-4">
+                <span className="badge bg-orange-50 text-orange-700">{r.category}</span>
+                <h4 className="mt-2 font-semibold text-slate-950">{r.title}</h4>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{r.ruleText}</p>
               </li>
             ))}
             {rules.length === 0 && <p className="text-sm text-gray-400">No rules yet.</p>}
