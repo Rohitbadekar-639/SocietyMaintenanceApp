@@ -4,6 +4,18 @@ import { useAuth } from '../../context/AuthContext'
 import { Alert } from '../../components/ui/Feedback'
 import AuthShell from '../../components/AuthShell'
 import { getApiErrorMessage } from '../../utils/apiError'
+import {
+  collectErrors,
+  email,
+  firstError,
+  flatNumber,
+  hasErrors,
+  mobile,
+  personName,
+  societyCode,
+  signupPassword,
+  SIGNUP_PASSWORD_HINT,
+} from '../../utils/validation'
 
 const initial = {
   societyCode: '',
@@ -18,6 +30,7 @@ export default function RegisterMember() {
   const { registerMember, loading } = useAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState(initial)
+  const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
 
   function update(e) {
@@ -27,8 +40,28 @@ export default function RegisterMember() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    const errors = collectErrors({
+      societyCode: societyCode(form.societyCode),
+      fullName: personName(form.fullName),
+      email: email(form.email),
+      mobile: mobile(form.mobile),
+      flatNumber: flatNumber(form.flatNumber),
+      password: signupPassword(form.password),
+    })
+    setFieldErrors(errors)
+    if (hasErrors(errors)) {
+      setError(firstError(errors))
+      return
+    }
     try {
-      await registerMember(form)
+      await registerMember({
+        societyCode: form.societyCode.trim(),
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
+        mobile: form.mobile.trim().replace(/\s+/g, ''),
+        flatNumber: form.flatNumber.trim(),
+        password: form.password,
+      })
       navigate('/member')
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not create member account.'))
@@ -43,32 +76,39 @@ export default function RegisterMember() {
     >
       <div className="space-y-5">
         <Alert type="error">{error}</Alert>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
             <label className="label">Society code</label>
-            <input name="societyCode" className="input" value={form.societyCode} onChange={update} required placeholder="e.g. SGR-MUMBAI" />
+            <input name="societyCode" className="input" value={form.societyCode} onChange={update} placeholder="e.g. SGR-MUMBAI" maxLength={40} />
+            {fieldErrors.societyCode && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.societyCode}</p>}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label">Full name</label>
-              <input name="fullName" className="input" value={form.fullName} onChange={update} required />
+              <input name="fullName" className="input" value={form.fullName} onChange={update} maxLength={120} />
+              {fieldErrors.fullName && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.fullName}</p>}
             </div>
             <div>
               <label className="label">Flat number</label>
-              <input name="flatNumber" className="input" value={form.flatNumber} onChange={update} required />
+              <input name="flatNumber" className="input" value={form.flatNumber} onChange={update} maxLength={30} />
+              {fieldErrors.flatNumber && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.flatNumber}</p>}
             </div>
             <div>
               <label className="label">Mobile</label>
-              <input name="mobile" className="input" value={form.mobile} onChange={update} required />
+              <input name="mobile" className="input" value={form.mobile} onChange={update} inputMode="numeric" placeholder="10-digit mobile" maxLength={10} />
+              {fieldErrors.mobile && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.mobile}</p>}
             </div>
             <div>
               <label className="label">Email</label>
-              <input name="email" type="email" className="input" value={form.email} onChange={update} required />
+              <input name="email" type="email" className="input" value={form.email} onChange={update} />
+              {fieldErrors.email && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.email}</p>}
             </div>
           </div>
           <div>
             <label className="label">Password</label>
-            <input name="password" type="password" className="input" value={form.password} onChange={update} required minLength={6} />
+            <input name="password" type="password" className="input" value={form.password} onChange={update} autoComplete="new-password" placeholder="e.g. Member@123" />
+            <p className="mt-1 text-xs text-slate-500">{SIGNUP_PASSWORD_HINT}</p>
+            {fieldErrors.password && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.password}</p>}
           </div>
           <button className="btn-primary w-full !bg-orange-500 !py-3 hover:!bg-orange-600" disabled={loading}>
             {loading ? 'Creating account…' : 'Create member account'}

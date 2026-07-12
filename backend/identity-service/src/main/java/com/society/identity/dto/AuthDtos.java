@@ -2,6 +2,7 @@ package com.society.identity.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -10,29 +11,67 @@ import jakarta.validation.constraints.Size;
 public class AuthDtos {
 
     public record RegisterSocietyRequest(
-            @NotBlank String societyName,
-            @NotBlank String societyCode,
+            @NotBlank(message = "Society name is required")
+            @Size(min = 2, max = 150, message = "Society name must be 2–150 characters")
+            String societyName,
+            @NotBlank(message = "Society code is required")
+            @Size(min = 2, max = 40, message = "Society code must be 2–40 characters")
+            @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9_-]*$", message = "Society code may use letters, numbers, hyphen and underscore")
+            String societyCode,
+            @Size(max = 250, message = "Address is too long")
             String address,
+            @Size(max = 100, message = "City is too long")
             String city,
-            @NotBlank String adminName,
-            @NotBlank @Email String adminEmail,
-            @NotBlank String adminMobile,
-            @NotBlank @Size(min = 6, message = "Password must be at least 6 characters") String password
+            @NotBlank(message = "Full name is required")
+            @Size(min = 2, max = 120, message = "Full name must be 2–120 characters")
+            String adminName,
+            @NotBlank(message = "Email is required")
+            @Email(message = "Enter a valid email address")
+            String adminEmail,
+            @NotBlank(message = "Mobile number is required")
+            @Pattern(regexp = "^[6-9]\\d{9}$", message = "Enter a valid 10-digit Indian mobile number")
+            String adminMobile,
+            @NotBlank(message = "Password is required")
+            @Size(min = 8, max = 72, message = "Password must be 8–72 characters")
+            @Pattern(
+                    regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,72}$",
+                    message = "Password must include uppercase, lowercase, a number, and a symbol"
+            )
+            String password
     ) {}
 
     public record LoginRequest(
-            @NotBlank @Email String email,
-            @NotBlank String password
+            @NotBlank(message = "Email is required")
+            @Email(message = "Enter a valid email address")
+            String email,
+            @NotBlank(message = "Password is required")
+            String password
     ) {}
 
     /** Resident self-signup into an existing society using the society code. */
     public record RegisterMemberRequest(
-            @NotBlank String societyCode,
-            @NotBlank String fullName,
-            @NotBlank @Email String email,
-            @NotBlank String mobile,
-            @NotBlank String flatNumber,
-            @NotBlank @Size(min = 6, message = "Password must be at least 6 characters") String password
+            @NotBlank(message = "Society code is required")
+            @Size(min = 2, max = 40, message = "Society code must be 2–40 characters")
+            String societyCode,
+            @NotBlank(message = "Full name is required")
+            @Size(min = 2, max = 120, message = "Full name must be 2–120 characters")
+            String fullName,
+            @NotBlank(message = "Email is required")
+            @Email(message = "Enter a valid email address")
+            String email,
+            @NotBlank(message = "Mobile number is required")
+            @Pattern(regexp = "^[6-9]\\d{9}$", message = "Enter a valid 10-digit Indian mobile number")
+            String mobile,
+            @NotBlank(message = "Flat number is required")
+            @Size(min = 1, max = 30, message = "Flat number must be 1–30 characters")
+            String flatNumber,
+            @NotBlank(message = "Password is required")
+            @Size(min = 8, max = 72, message = "Password must be 8–72 characters")
+            @Pattern(
+                    regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,72}$",
+                    message = "Password must include uppercase, lowercase, a number, and a symbol"
+            )
+            String password
     ) {}
 
     /**
@@ -40,11 +79,19 @@ public class AuthDtos {
      * Verifies society code + email + mobile + flat number, then sets a new password.
      */
     public record ForgotPasswordRequest(
-            @NotBlank String societyCode,
-            @NotBlank @Email String email,
-            @NotBlank String mobile,
-            @NotBlank String flatNumber,
-            @NotBlank @Size(min = 6, message = "Password must be at least 6 characters") String newPassword
+            @NotBlank(message = "Society code is required")
+            String societyCode,
+            @NotBlank(message = "Email is required")
+            @Email(message = "Enter a valid email address")
+            String email,
+            @NotBlank(message = "Mobile number is required")
+            @Pattern(regexp = "^[6-9]\\d{9}$", message = "Enter a valid 10-digit Indian mobile number")
+            String mobile,
+            @NotBlank(message = "Flat number is required")
+            String flatNumber,
+            @NotBlank(message = "New password is required")
+            @Size(min = 6, max = 72, message = "Password must be 6–72 characters")
+            String newPassword
     ) {}
 
     public record MessageResponse(String message) {}
@@ -58,6 +105,7 @@ public class AuthDtos {
     public record UserView(
             String id,
             String societyId,
+            String societyName,
             String fullName,
             String email,
             String mobile,

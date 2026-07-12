@@ -67,8 +67,8 @@ export default function AdminDashboard() {
       <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm shadow-slate-900/[.03] lg:min-h-[calc(100vh-150px)]">
         <div className="border-b border-slate-100 px-3 pb-4 pt-2">
           <p className="text-xs font-bold uppercase tracking-[.14em] text-slate-400">Committee workspace</p>
-          <p className="mt-2 truncate text-sm font-bold text-slate-900">{user?.fullName}</p>
-          <p className="mt-0.5 text-xs text-slate-500">Admin · Secretary / Chairman</p>
+          <p className="mt-2 truncate text-sm font-bold text-slate-900">{user?.societyName || 'Your society'}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-500">{user?.fullName} · Admin</p>
         </div>
         <nav className="mt-3 grid gap-1">
           {tabs.map((tab) => (
@@ -93,7 +93,9 @@ export default function AdminDashboard() {
       <section className="min-w-0">
         <div className="mb-6 flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[.14em] text-orange-600">SocietyWale admin</p>
+            <p className="text-xs font-bold uppercase tracking-[.14em] text-orange-600">
+              {user?.societyName || 'SocietyWale admin'}
+            </p>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{tabs.find((tab) => tab.id === active).label}</h1>
           </div>
           <p className="text-sm text-slate-500">Members can view. Only admins can create or change records.</p>

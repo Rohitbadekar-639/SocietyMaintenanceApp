@@ -3,11 +3,13 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Alert } from '../../components/ui/Feedback'
 import AuthShell from '../../components/AuthShell'
+import { collectErrors, email, firstError, hasErrors, password } from '../../utils/validation'
 
 export default function Login() {
   const { login, loading } = useAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState({ email: '', password: '' })
+  const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
 
   function update(e) {
@@ -17,12 +19,21 @@ export default function Login() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    const errors = collectErrors({
+      email: email(form.email),
+      password: password(form.password),
+    })
+    setFieldErrors(errors)
+    if (hasErrors(errors)) {
+      setError(firstError(errors))
+      return
+    }
     try {
-      const user = await login(form.email, form.password)
+      const user = await login(form.email.trim(), form.password)
       navigate(user.role === 'ADMIN' ? '/admin' : '/member')
     } catch (err) {
       if (!err.response) {
-        setError('The authentication service is offline. Start the Identity Service on port 8081, then try again.')
+        setError('The authentication service is offline. Please try again shortly.')
       } else {
         setError(err.response.data?.message || 'Login failed. Check your email and password.')
       }
@@ -34,7 +45,7 @@ export default function Login() {
       <div className="space-y-5">
         <Alert type="error">{error}</Alert>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
             <label className="label">Email address</label>
             <input
@@ -43,9 +54,10 @@ export default function Login() {
               className="input"
               value={form.email}
               onChange={update}
-              required
+              autoComplete="email"
               placeholder="you@example.com"
             />
+            {fieldErrors.email && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.email}</p>}
           </div>
           <div>
             <label className="label">Password</label>
@@ -55,9 +67,10 @@ export default function Login() {
               className="input"
               value={form.password}
               onChange={update}
-              required
+              autoComplete="current-password"
               placeholder="••••••••"
             />
+            {fieldErrors.password && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.password}</p>}
             <p className="mt-2 text-right text-sm">
               <Link to="/forgot-password" className="font-semibold text-orange-600 hover:text-orange-700">
                 Forget/Reset Password?

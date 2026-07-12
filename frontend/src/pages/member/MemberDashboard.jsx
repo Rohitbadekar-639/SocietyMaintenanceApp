@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import {
@@ -14,7 +14,7 @@ import {
 import { Alert, SectionTitle, StatusBadge } from '../../components/ui/Feedback'
 import { getApiErrorMessage } from '../../utils/apiError'
 import { inr, monthName, whatsappLink, formatNoticeDate } from '../../utils/share'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 const now = new Date()
 
@@ -59,6 +59,8 @@ const emptyClaimForm = {
 export default function MemberDashboard() {
   const { user } = useAuth()
   const toast = useToast()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [charges, setCharges] = useState([])
   const [rates, setRates] = useState([])
   const [notices, setNotices] = useState([])
@@ -71,6 +73,24 @@ export default function MemberDashboard() {
   const [claimBusy, setClaimBusy] = useState(false)
   const [showClaimForm, setShowClaimForm] = useState(true)
   const [error, setError] = useState('')
+  const [unreadNotices, setUnreadNotices] = useState(0)
+  const knownUnread = useRef(null)
+  const noticesSectionRef = useRef(null)
+
+  async function refreshUnreadNotices({ toastOnIncrease = true } = {}) {
+    try {
+      const res = await NoticeService.unreadCount()
+      const count = Number(res?.count || 0)
+      if (toastOnIncrease && knownUnread.current !== null && count > knownUnread.current) {
+        const added = count - knownUnread.current
+        toast.info(`${added} new society notice${added === 1 ? '' : 's'} from committee.`)
+      }
+      knownUnread.current = count
+      setUnreadNotices(count)
+    } catch {
+      // Keep last known badge if refresh fails
+    }
+  }
 
   async function load() {
     try {
@@ -92,12 +112,39 @@ export default function MemberDashboard() {
       setDocs(d)
       setClaims(cl)
       setRates(rateList)
+      await refreshUnreadNotices({ toastOnIncrease: false })
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not load member workspace.'))
     }
   }
 
   useEffect(() => { if (user) load() }, [user])
+
+  useEffect(() => {
+    if (!user) return undefined
+    const id = window.setInterval(() => refreshUnreadNotices(), 30000)
+    return () => window.clearInterval(id)
+  }, [user])
+
+  useEffect(() => {
+    if (location.state?.focusNotices) {
+      openNotices()
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state])
+
+  async function openNotices() {
+    noticesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (unreadNotices <= 0) return
+    try {
+      await NoticeService.markRead()
+      setUnreadNotices(0)
+      knownUnread.current = 0
+      setNotices((prev) => prev.map((n) => ({ ...n, unread: false })))
+    } catch {
+      // Banner can retry on next poll
+    }
+  }
 
   const pending = charges.filter((c) => c.status === 'PENDING')
   const submittedPeriods = useMemo(
@@ -186,12 +233,30 @@ export default function MemberDashboard() {
     <div className="space-y-6">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/[.03]">
         <div className="bg-[linear-gradient(135deg,#102A43_0%,#173e62_55%,#0f766e_140%)] px-5 py-5 text-white sm:px-7 sm:py-6">
-          <p className="text-xs font-bold uppercase tracking-[.14em] text-orange-300">My profile</p>
-          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{user?.fullName || 'Member'}</h1>
+              <p className="text-xs font-bold uppercase tracking-[.14em] text-orange-300">
+                {user?.societyName || 'My society'}
+              </p>
+              <h1 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">{user?.fullName || 'Member'}</h1>
               <p className="mt-1 text-sm text-slate-200">Resident access · view records and notify payments</p>
             </div>
+            <button
+              type="button"
+              onClick={openNotices}
+              className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/15 text-lg text-white transition hover:bg-white/25"
+              aria-label={unreadNotices > 0 ? `${unreadNotices} unread notices` : 'Notices'}
+              title="Notices"
+            >
+              🔔
+              {unreadNotices > 0 && (
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-orange-500 px-1 text-[11px] font-bold text-white">
+                  {unreadNotices > 9 ? '9+' : unreadNotices}
+                </span>
+              )}
+            </button>
+          </div>
+          <div className="mt-4">
             <span className="inline-flex w-fit rounded-full bg-white/15 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
               Flat {user?.flatNumber || '—'}
             </span>
@@ -214,6 +279,20 @@ export default function MemberDashboard() {
       </div>
 
       <Alert type="error">{error}</Alert>
+
+      {unreadNotices > 0 && (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-bold">{unreadNotices} new notice{unreadNotices === 1 ? '' : 's'} from committee.</p>
+              <p className="mt-1 text-sky-900/80">Open Latest Notices to review the announcement.</p>
+            </div>
+            <button type="button" className="btn-primary shrink-0 !bg-sky-700 hover:!bg-sky-800" onClick={openNotices}>
+              View notices
+            </button>
+          </div>
+        </div>
+      )}
 
       {pendingClaims.length > 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -443,13 +522,26 @@ export default function MemberDashboard() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card">
-          <SectionTitle title="Latest Notices" />
+        <div className="card" ref={noticesSectionRef}>
+          <SectionTitle
+            title="Latest Notices"
+            subtitle={unreadNotices > 0 ? `${unreadNotices} unread` : undefined}
+            action={
+              unreadNotices > 0 ? (
+                <button type="button" className="text-sm font-bold text-orange-600" onClick={openNotices}>
+                  Mark as read
+                </button>
+              ) : null
+            }
+          />
           <ul className="space-y-3">
             {notices.slice(0, 5).map((n) => (
-              <li key={n.id} className="rounded-lg border border-gray-100 p-3">
+              <li key={n.id} className={`rounded-lg border p-3 ${n.unread ? 'border-sky-200 bg-sky-50/60' : 'border-gray-100'}`}>
                 <div className="flex items-start justify-between gap-2">
-                  <h4 className="font-semibold">{n.title}</h4>
+                  <h4 className="font-semibold">
+                    {n.title}
+                    {n.unread && <span className="ml-2 text-[11px] font-bold uppercase tracking-wide text-sky-700">New</span>}
+                  </h4>
                   <span className="shrink-0 text-[11px] font-medium text-slate-400">{formatNoticeDate(n.createdAt)}</span>
                 </div>
                 <p className="mt-1 text-sm text-gray-600">{n.body}</p>

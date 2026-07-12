@@ -56,7 +56,7 @@ public class AuthService {
         admin = userRepository.save(admin);
 
         String token = jwtService.generateToken(admin);
-        return new AuthResponse(token, "Bearer", toView(admin));
+        return new AuthResponse(token, "Bearer", toView(admin, society.getName()));
     }
 
     @Transactional
@@ -85,7 +85,7 @@ public class AuthService {
         member = userRepository.save(member);
 
         String token = jwtService.generateToken(member);
-        return new AuthResponse(token, "Bearer", toView(member));
+        return new AuthResponse(token, "Bearer", toView(member, society.getName()));
     }
 
     @Transactional(readOnly = true)
@@ -135,10 +135,18 @@ public class AuthService {
         return new MessageResponse("Password updated. You can sign in with your email and new password.");
     }
 
-    public static UserView toView(User u) {
+    private UserView toView(User u) {
+        String societyName = societyRepository.findById(u.getSocietyId())
+                .map(Society::getName)
+                .orElse(null);
+        return toView(u, societyName);
+    }
+
+    private static UserView toView(User u, String societyName) {
         return new UserView(
                 u.getId().toString(),
                 u.getSocietyId().toString(),
+                societyName,
                 u.getFullName(),
                 u.getEmail(),
                 u.getMobile(),

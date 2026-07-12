@@ -11,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/notices")
@@ -25,7 +26,22 @@ public class NoticeController {
     @GetMapping
     public ResponseEntity<List<NoticeResponse>> list(
             @AuthenticationPrincipal AuthenticatedUser user) {
-        return ResponseEntity.ok(service.listNotices(user.societyId()));
+        boolean memberView = "MEMBER".equals(user.role());
+        return ResponseEntity.ok(service.listNotices(user.societyId(), user.userId(), memberView));
+    }
+
+    @GetMapping("/unread-count")
+    @PreAuthorize("hasRole('MEMBER')")
+    public ResponseEntity<UnreadNoticesResponse> unreadCount(
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        return ResponseEntity.ok(service.unreadCount(user.societyId(), user.userId()));
+    }
+
+    @PostMapping("/mark-read")
+    @PreAuthorize("hasRole('MEMBER')")
+    public ResponseEntity<UnreadNoticesResponse> markRead(
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        return ResponseEntity.ok(service.markAllRead(user.societyId(), user.userId()));
     }
 
     @PostMapping
@@ -35,5 +51,13 @@ public class NoticeController {
             @Valid @RequestBody CreateNoticeRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(service.createNotice(user.societyId(), user.userId(), user.name(), req));
+    }
+
+    @PostMapping("/{id}/notify")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<NoticeResponse> notifyMembers(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(service.notifyMembers(user.societyId(), id));
     }
 }

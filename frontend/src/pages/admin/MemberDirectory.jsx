@@ -3,6 +3,15 @@ import { MemberService } from '../../api/services'
 import { Alert, SectionTitle, StatusBadge } from '../../components/ui/Feedback'
 import { useToast } from '../../context/ToastContext'
 import { getApiErrorMessage } from '../../utils/apiError'
+import {
+  collectErrors,
+  email,
+  firstError,
+  flatNumber,
+  hasErrors,
+  mobile,
+  personName,
+} from '../../utils/validation'
 
 const emptyForm = { fullName: '', flatNumber: '', mobile: '', email: '' }
 
@@ -11,6 +20,8 @@ export default function MemberDirectory() {
   const [members, setMembers] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [editForm, setEditForm] = useState(null)
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [editFieldErrors, setEditFieldErrors] = useState({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [rowBusy, setRowBusy] = useState('')
@@ -31,17 +42,35 @@ export default function MemberDirectory() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
+  function validateMember(values) {
+    return collectErrors({
+      fullName: personName(values.fullName, 'Name'),
+      flatNumber: flatNumber(values.flatNumber),
+      mobile: mobile(values.mobile),
+      email: email(values.email, { required: false }),
+    })
+  }
+
   async function handleAdd(e) {
     e.preventDefault()
     setError('')
+    const errors = validateMember(form)
+    setFieldErrors(errors)
+    if (hasErrors(errors)) {
+      setError(firstError(errors))
+      return
+    }
     setBusy(true)
     try {
       const payload = {
-        ...form,
+        fullName: form.fullName.trim(),
+        flatNumber: form.flatNumber.trim(),
+        mobile: form.mobile.trim().replace(/\s+/g, ''),
         email: form.email.trim() ? form.email.trim() : null,
       }
       await MemberService.add(payload)
       setForm(emptyForm)
+      setFieldErrors({})
       toast.success('Member added. Default password is their mobile number (needs email to sign in).')
       await load()
     } catch (err) {
@@ -54,16 +83,23 @@ export default function MemberDirectory() {
   async function handleUpdate(e) {
     e.preventDefault()
     if (!editForm?.id) return
+    const errors = validateMember(editForm)
+    setEditFieldErrors(errors)
+    if (hasErrors(errors)) {
+      toast.error(firstError(errors))
+      return
+    }
     setRowBusy(editForm.id)
     try {
       await MemberService.update(editForm.id, {
-        fullName: editForm.fullName,
-        flatNumber: editForm.flatNumber,
-        mobile: editForm.mobile,
+        fullName: editForm.fullName.trim(),
+        flatNumber: editForm.flatNumber.trim(),
+        mobile: editForm.mobile.trim().replace(/\s+/g, ''),
         email: editForm.email?.trim() ? editForm.email.trim() : null,
       })
       toast.success('Member updated.')
       setEditForm(null)
+      setEditFieldErrors({})
       await load()
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Could not update member.'))
@@ -109,22 +145,26 @@ export default function MemberDirectory() {
         <div className="card">
           <SectionTitle title="Add Member" subtitle="Register a resident" />
           <Alert type="error">{error}</Alert>
-          <form onSubmit={handleAdd} className="mt-3 space-y-3">
+          <form onSubmit={handleAdd} className="mt-3 space-y-3" noValidate>
             <div>
               <label className="label">Name</label>
-              <input name="fullName" className="input" value={form.fullName} onChange={update} required />
+              <input name="fullName" className="input" value={form.fullName} onChange={update} maxLength={120} />
+              {fieldErrors.fullName && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.fullName}</p>}
             </div>
             <div>
               <label className="label">Flat Number</label>
-              <input name="flatNumber" className="input" value={form.flatNumber} onChange={update} required placeholder="A-101" />
+              <input name="flatNumber" className="input" value={form.flatNumber} onChange={update} placeholder="A-101" maxLength={30} />
+              {fieldErrors.flatNumber && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.flatNumber}</p>}
             </div>
             <div>
               <label className="label">Mobile</label>
-              <input name="mobile" className="input" value={form.mobile} onChange={update} required />
+              <input name="mobile" className="input" value={form.mobile} onChange={update} inputMode="numeric" maxLength={10} />
+              {fieldErrors.mobile && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.mobile}</p>}
             </div>
             <div>
               <label className="label">Email (for login)</label>
               <input name="email" type="email" className="input" value={form.email} onChange={update} placeholder="Recommended for sign-in" />
+              {fieldErrors.email && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.email}</p>}
             </div>
             <button className="btn-primary w-full" disabled={busy}>
               {busy ? 'Adding…' : 'Add Member'}
@@ -215,32 +255,36 @@ export default function MemberDirectory() {
 
       {editForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <form onSubmit={handleUpdate} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          <form onSubmit={handleUpdate} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" noValidate>
             <p className="text-xs font-bold uppercase tracking-[.14em] text-orange-600">Edit member</p>
             <h3 className="mt-2 text-xl font-extrabold text-slate-950">Update details</h3>
             <div className="mt-4 space-y-3">
               <div>
                 <label className="label">Name</label>
-                <input className="input" value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} required />
+                <input className="input" value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} maxLength={120} />
+                {editFieldErrors.fullName && <p className="mt-1 text-xs font-medium text-red-600">{editFieldErrors.fullName}</p>}
               </div>
               <div>
                 <label className="label">Flat number</label>
-                <input className="input" value={editForm.flatNumber} onChange={(e) => setEditForm({ ...editForm, flatNumber: e.target.value })} required />
+                <input className="input" value={editForm.flatNumber} onChange={(e) => setEditForm({ ...editForm, flatNumber: e.target.value })} maxLength={30} />
+                {editFieldErrors.flatNumber && <p className="mt-1 text-xs font-medium text-red-600">{editFieldErrors.flatNumber}</p>}
               </div>
               <div>
                 <label className="label">Mobile</label>
-                <input className="input" value={editForm.mobile} onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })} required />
+                <input className="input" value={editForm.mobile} onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })} inputMode="numeric" maxLength={10} />
+                {editFieldErrors.mobile && <p className="mt-1 text-xs font-medium text-red-600">{editFieldErrors.mobile}</p>}
               </div>
               <div>
                 <label className="label">Email (for login)</label>
                 <input type="email" className="input" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="Required for member sign-in" />
+                {editFieldErrors.email && <p className="mt-1 text-xs font-medium text-red-600">{editFieldErrors.email}</p>}
               </div>
             </div>
             <div className="mt-6 flex gap-2">
               <button className="btn-primary flex-1" disabled={rowBusy === editForm.id}>
                 {rowBusy === editForm.id ? 'Saving…' : 'Save changes'}
               </button>
-              <button type="button" className="btn-secondary flex-1" onClick={() => setEditForm(null)}>Cancel</button>
+              <button type="button" className="btn-secondary flex-1" onClick={() => { setEditForm(null); setEditFieldErrors({}) }}>Cancel</button>
             </div>
           </form>
         </div>

@@ -4,6 +4,7 @@ import { Alert, SectionTitle } from '../../components/ui/Feedback'
 import { useToast } from '../../context/ToastContext'
 import { getApiErrorMessage } from '../../utils/apiError'
 import { buildNoticeWhatsAppText, formatNoticeDate, whatsappLink } from '../../utils/share'
+import { collectErrors, firstError, hasErrors, text } from '../../utils/validation'
 
 export default function NoticeBoard() {
   const toast = useToast()
@@ -11,7 +12,10 @@ export default function NoticeBoard() {
   const [rules, setRules] = useState([])
   const [noticeForm, setNoticeForm] = useState({ title: '', body: '', priority: 'NORMAL' })
   const [ruleForm, setRuleForm] = useState({ category: '', title: '', ruleText: '' })
+  const [noticeFieldErrors, setNoticeFieldErrors] = useState({})
+  const [ruleFieldErrors, setRuleFieldErrors] = useState({})
   const [error, setError] = useState('')
+  const [notifyBusy, setNotifyBusy] = useState('')
 
   async function load() {
     try {
@@ -30,10 +34,24 @@ export default function NoticeBoard() {
   async function postNotice(e) {
     e.preventDefault()
     setError('')
+    const errors = collectErrors({
+      title: text(noticeForm.title, 'Title', { min: 3, max: 250 }),
+      body: text(noticeForm.body, 'Message', { min: 3, max: 4000 }),
+    })
+    setNoticeFieldErrors(errors)
+    if (hasErrors(errors)) {
+      setError(firstError(errors))
+      return
+    }
     try {
-      await NoticeService.create(noticeForm)
+      await NoticeService.create({
+        title: noticeForm.title.trim(),
+        body: noticeForm.body.trim(),
+        priority: noticeForm.priority,
+      })
       setNoticeForm({ title: '', body: '', priority: 'NORMAL' })
-      toast.success('Notice posted.')
+      setNoticeFieldErrors({})
+      toast.success('Notice posted. Use Notify members when ready.')
       await load()
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not post notice.'))
@@ -43,13 +61,42 @@ export default function NoticeBoard() {
   async function postRule(e) {
     e.preventDefault()
     setError('')
+    const errors = collectErrors({
+      category: text(ruleForm.category, 'Category', { min: 2, max: 80 }),
+      title: text(ruleForm.title, 'Title', { min: 3, max: 250 }),
+      ruleText: text(ruleForm.ruleText, 'Rule text', { min: 3, max: 4000 }),
+    })
+    setRuleFieldErrors(errors)
+    if (hasErrors(errors)) {
+      setError(firstError(errors))
+      return
+    }
     try {
-      await RuleService.create(ruleForm)
+      await RuleService.create({
+        category: ruleForm.category.trim(),
+        title: ruleForm.title.trim(),
+        ruleText: ruleForm.ruleText.trim(),
+      })
       setRuleForm({ category: '', title: '', ruleText: '' })
+      setRuleFieldErrors({})
       toast.success('Rule added.')
       await load()
     } catch (err) {
       setError(getApiErrorMessage(err, 'Could not add rule.'))
+    }
+  }
+
+  async function notifyMembers(notice) {
+    setNotifyBusy(notice.id)
+    setError('')
+    try {
+      await NoticeService.notify(notice.id)
+      toast.success('Members notified. They will see a notice badge on their dashboard.')
+      await load()
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not notify members.'))
+    } finally {
+      setNotifyBusy('')
     }
   }
 
@@ -71,15 +118,16 @@ export default function NoticeBoard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="card">
           <SectionTitle title="Post Announcement" subtitle="Broadcast to all members" />
-          <form onSubmit={postNotice} className="space-y-3">
+          <form onSubmit={postNotice} className="space-y-3" noValidate>
             <div>
               <label className="label">Title</label>
               <input
                 className="input"
                 value={noticeForm.title}
                 onChange={(e) => setNoticeForm({ ...noticeForm, title: e.target.value })}
-                required
+                maxLength={250}
               />
+              {noticeFieldErrors.title && <p className="mt-1 text-xs font-medium text-red-600">{noticeFieldErrors.title}</p>}
             </div>
             <div>
               <label className="label">Message</label>
@@ -88,8 +136,9 @@ export default function NoticeBoard() {
                 rows="3"
                 value={noticeForm.body}
                 onChange={(e) => setNoticeForm({ ...noticeForm, body: e.target.value })}
-                required
+                maxLength={4000}
               />
+              {noticeFieldErrors.body && <p className="mt-1 text-xs font-medium text-red-600">{noticeFieldErrors.body}</p>}
             </div>
             <div>
               <label className="label">Priority</label>
@@ -109,16 +158,17 @@ export default function NoticeBoard() {
 
         <div className="card">
           <SectionTitle title="Add Rule" subtitle="Society rules & bylaws" />
-          <form onSubmit={postRule} className="space-y-3">
+          <form onSubmit={postRule} className="space-y-3" noValidate>
             <div>
               <label className="label">Category</label>
               <input
                 className="input"
                 value={ruleForm.category}
                 onChange={(e) => setRuleForm({ ...ruleForm, category: e.target.value })}
-                required
                 placeholder="Parking, Pets, Noise…"
+                maxLength={80}
               />
+              {ruleFieldErrors.category && <p className="mt-1 text-xs font-medium text-red-600">{ruleFieldErrors.category}</p>}
             </div>
             <div>
               <label className="label">Title</label>
@@ -126,8 +176,9 @@ export default function NoticeBoard() {
                 className="input"
                 value={ruleForm.title}
                 onChange={(e) => setRuleForm({ ...ruleForm, title: e.target.value })}
-                required
+                maxLength={250}
               />
+              {ruleFieldErrors.title && <p className="mt-1 text-xs font-medium text-red-600">{ruleFieldErrors.title}</p>}
             </div>
             <div>
               <label className="label">Rule Text</label>
@@ -136,8 +187,9 @@ export default function NoticeBoard() {
                 rows="3"
                 value={ruleForm.ruleText}
                 onChange={(e) => setRuleForm({ ...ruleForm, ruleText: e.target.value })}
-                required
+                maxLength={4000}
               />
+              {ruleFieldErrors.ruleText && <p className="mt-1 text-xs font-medium text-red-600">{ruleFieldErrors.ruleText}</p>}
             </div>
             <button className="btn-primary w-full">Add Rule</button>
           </form>
@@ -161,7 +213,21 @@ export default function NoticeBoard() {
                   <span className={`badge shrink-0 ${priorityColor[n.priority] || ''}`}>{n.priority}</span>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-600">{n.body}</p>
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {n.notifiedAt ? (
+                    <span className="inline-flex items-center rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700">
+                      Members notified
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-primary !py-1.5 !text-xs"
+                      disabled={notifyBusy === n.id}
+                      onClick={() => notifyMembers(n)}
+                    >
+                      {notifyBusy === n.id ? 'Notifying…' : 'Notify members'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn-success !py-1.5 !text-xs"

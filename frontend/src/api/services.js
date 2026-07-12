@@ -43,6 +43,9 @@ export const ExpenseService = {
 export const NoticeService = {
   list: () => coreApi.get('/notices').then((r) => r.data),
   create: (payload) => coreApi.post('/notices', payload).then((r) => r.data),
+  notify: (id) => coreApi.post(`/notices/${id}/notify`).then((r) => r.data),
+  unreadCount: () => coreApi.get('/notices/unread-count').then((r) => r.data),
+  markRead: () => coreApi.post('/notices/mark-read').then((r) => r.data),
 }
 
 export const RuleService = {

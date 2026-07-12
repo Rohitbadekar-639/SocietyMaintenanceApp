@@ -34,6 +34,10 @@ public class Notice {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    /** When set, members receive an in-app notice notification (claim-style badge). */
+    @Column(name = "notified_at")
+    private Instant notifiedAt;
+
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
     public UUID getSocietyId() { return societyId; }
@@ -50,4 +54,6 @@ public class Notice {
     public void setCreatedByName(String createdByName) { this.createdByName = createdByName; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public Instant getNotifiedAt() { return notifiedAt; }
+    public void setNotifiedAt(Instant notifiedAt) { this.notifiedAt = notifiedAt; }
 }

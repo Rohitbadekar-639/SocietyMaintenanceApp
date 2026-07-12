@@ -1,10 +1,20 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert } from '../../components/ui/Feedback'
+import {
+  collectErrors,
+  email,
+  firstError,
+  hasErrors,
+  personName,
+  text,
+} from '../../utils/validation'
 
 export default function Contact() {
   const [sent, setSent] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', society: '', message: '' })
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [error, setError] = useState('')
 
   function update(e) {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -12,6 +22,19 @@ export default function Contact() {
 
   function handleSubmit(e) {
     e.preventDefault()
+    setError('')
+    const errors = collectErrors({
+      name: personName(form.name, 'Name'),
+      email: email(form.email),
+      society: text(form.society, 'Society name', { required: false, max: 150 }),
+      message: text(form.message, 'Message', { min: 10, max: 2000 }),
+    })
+    setFieldErrors(errors)
+    if (hasErrors(errors)) {
+      setError(firstError(errors))
+      setSent(false)
+      return
+    }
     setSent(true)
   }
 
@@ -52,23 +75,28 @@ export default function Contact() {
         </div>
 
         <div className="card">
+          <Alert type="error">{error}</Alert>
           {sent && <Alert type="success">Thanks! Your message has been received. We’ll get back to you soon.</Alert>}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div>
               <label className="label">Name</label>
-              <input name="name" className="input" required value={form.name} onChange={update} placeholder="Your name" />
+              <input name="name" className="input" value={form.name} onChange={update} placeholder="Your name" maxLength={120} />
+              {fieldErrors.name && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.name}</p>}
             </div>
             <div>
               <label className="label">Email</label>
-              <input name="email" type="email" className="input" required value={form.email} onChange={update} placeholder="you@example.com" />
+              <input name="email" type="email" className="input" value={form.email} onChange={update} placeholder="you@example.com" />
+              {fieldErrors.email && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.email}</p>}
             </div>
             <div>
               <label className="label">Society name (optional)</label>
-              <input name="society" className="input" value={form.society} onChange={update} placeholder="Gokuldham Society" />
+              <input name="society" className="input" value={form.society} onChange={update} placeholder="Gokuldham Society" maxLength={150} />
+              {fieldErrors.society && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.society}</p>}
             </div>
             <div>
               <label className="label">Message</label>
-              <textarea name="message" className="input" rows="4" required value={form.message} onChange={update} placeholder="How can we help?" />
+              <textarea name="message" className="input" rows="4" value={form.message} onChange={update} placeholder="How can we help?" maxLength={2000} />
+              {fieldErrors.message && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.message}</p>}
             </div>
             <button className="btn-primary w-full !bg-orange-500 hover:!bg-orange-600">Send message</button>
           </form>
