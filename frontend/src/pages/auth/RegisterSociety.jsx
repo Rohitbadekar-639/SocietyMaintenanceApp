@@ -266,7 +266,7 @@ export default function RegisterSociety() {
             </div>
             <div>
               <label className="label">Society Code</label>
-              <input name="societyCode" className="input" value={form.societyCode} onChange={update} placeholder="SGR-PUNE" maxLength={40} disabled={busy} />
+              <input name="societyCode" className="input" value={form.societyCode} onChange={update} placeholder="e.g. SGR-PUNE" maxLength={40} disabled={busy} />
               {fieldErrors.societyCode && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.societyCode}</p>}
             </div>
             <div>
