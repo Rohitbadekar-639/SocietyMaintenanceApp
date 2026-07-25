@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { identityApi } from '../../api/client'
 import { Alert } from '../../components/ui/Feedback'
 import AuthShell from '../../components/AuthShell'
+import TermsAgreementCheckbox from '../../components/TermsAgreementCheckbox'
 import {
   clearPendingPayment,
   openRazorpayCheckout,
@@ -54,6 +55,8 @@ export default function RegisterSociety() {
   const [info, setInfo] = useState('')
   const [paying, setPaying] = useState(false)
   const [pricing, setPricing] = useState(DEFAULT_PRICING)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [termsError, setTermsError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -135,8 +138,15 @@ export default function RegisterSociety() {
     e.preventDefault()
     setError('')
     setInfo('')
+    setTermsError('')
     const payload = validate()
     if (!payload) return
+
+    if (!acceptedTerms) {
+      setTermsError('Please accept the Terms of Use, Privacy Policy and Refund & Cancellation Policy to continue.')
+      setError('Please accept the terms and policies before payment.')
+      return
+    }
 
     if (pricing.enabled === false) {
       setError('Online payments are not available right now. Please email societywale.in@gmail.com or try again shortly.')
@@ -243,12 +253,7 @@ export default function RegisterSociety() {
               <span className="text-xs font-medium text-slate-500"> / year</span> */}
             </p>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              Pay securely via Razorpay (UPI / cards / netbanking). Click <b>Pay {chargeLabel} and Sign Up</b> after
-              filling the form. See {' '}
-              <Link to="/refund-policy" className="font-semibold text-orange-600 hover:text-orange-700">
-                Refund &amp; Cancellation Policy
-              </Link>
-              .
+              Pay securely via Razorpay (UPI / cards / netbanking)
             </p>
           </div>
         </div>
@@ -266,7 +271,7 @@ export default function RegisterSociety() {
             </div>
             <div>
               <label className="label">Society Code</label>
-              <input name="societyCode" className="input" value={form.societyCode} onChange={update} placeholder="e.g. SGR-PUNE" maxLength={40} disabled={busy} />
+              <input name="societyCode" className="input" value={form.societyCode} onChange={update} placeholder="e.g. SATARA-S312" maxLength={40} disabled={busy} />
               {fieldErrors.societyCode && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.societyCode}</p>}
             </div>
             <div>
@@ -282,7 +287,7 @@ export default function RegisterSociety() {
           </div>
 
           <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm font-bold text-slate-900">2. Committee/Secretary admin</p>
+            <p className="text-sm font-bold text-slate-900">2. Committee/Secretary admin details</p>
             <p className="mt-1 text-xs leading-5 text-slate-600">This account will manage members, maintenance, expenses and notices.</p>
           </div>
 
@@ -310,7 +315,22 @@ export default function RegisterSociety() {
             </div>
           </div>
 
-          <button className="btn-primary w-full !bg-orange-500 !py-3 hover:!bg-orange-600" disabled={busy}>
+          <TermsAgreementCheckbox
+            id="society-accept-terms"
+            checked={acceptedTerms}
+            disabled={busy}
+            includeRefund
+            error={termsError}
+            onChange={(value) => {
+              setAcceptedTerms(value)
+              if (value) setTermsError('')
+            }}
+          />
+
+          <button
+            className="btn-primary w-full !bg-orange-500 !py-3 hover:!bg-orange-600"
+            disabled={busy || !acceptedTerms}
+          >
             {paying
               ? 'Opening Razorpay…'
               : loading

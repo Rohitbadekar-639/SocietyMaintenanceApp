@@ -79,7 +79,7 @@ export default function RegisterMember() {
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
             <label className="label">Society code</label>
-            <input name="societyCode" className="input" value={form.societyCode} onChange={update} placeholder="e.g. SGR-MUMBAI" maxLength={40} />
+            <input name="societyCode" className="input" value={form.societyCode} onChange={update} placeholder="e.g. MUMBAI-S312" maxLength={40} />
             {fieldErrors.societyCode && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.societyCode}</p>}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
