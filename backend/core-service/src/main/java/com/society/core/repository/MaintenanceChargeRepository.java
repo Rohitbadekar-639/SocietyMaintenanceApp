@@ -22,6 +22,9 @@ public interface MaintenanceChargeRepository extends JpaRepository<MaintenanceCh
     Optional<MaintenanceCharge> findBySocietyIdAndFlatNumberAndBillingYearAndBillingMonth(
             UUID societyId, String flatNumber, int billingYear, int billingMonth);
 
+    long countBySocietyIdAndStatusAndBillingYearAndBillingMonth(
+            UUID societyId, MaintenanceStatus status, int billingYear, int billingMonth);
+
     @Query("""
             SELECT COALESCE(SUM(c.amount), 0) FROM MaintenanceCharge c
             WHERE c.societyId = :societyId AND c.status = :status

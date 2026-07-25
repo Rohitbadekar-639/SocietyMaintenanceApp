@@ -13,6 +13,7 @@ import SocietyAccounts from './SocietyAccounts'
 import AuditDocuments from './AuditDocuments'
 import PaymentClaims from './PaymentClaims'
 import ComplaintBoard from '../shared/ComplaintBoard'
+import AttentionDigestCard from '../../components/AttentionDigestCard'
 
 const tabs = [
   { id: 'overview', label: 'Overview', icon: '⌂', component: Overview },
@@ -133,6 +134,8 @@ function Overview({ onNavigate, pendingClaims = 0 }) {
 
   return (
     <div className="min-w-0 max-w-full space-y-6">
+      <AttentionDigestCard onNavigate={onNavigate} />
+
       {pendingClaims > 0 && (
         <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="min-w-0">

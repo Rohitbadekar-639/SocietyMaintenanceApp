@@ -111,3 +111,11 @@ export const AssistantService = {
   status: () => coreApi.get('/assistant/status').then((r) => r.data),
   chat: (payload) => coreApi.post('/assistant/chat', payload).then((r) => r.data),
 }
+
+/** Admin-only Groq AI tools (dues drafts, notice writer, attention digest). */
+export const SocietyAiService = {
+  status: () => coreApi.get('/ai/status').then((r) => r.data),
+  duesWhatsAppDraft: (payload) => coreApi.post('/ai/dues-whatsapp-draft', payload).then((r) => r.data),
+  noticeDraft: (payload) => coreApi.post('/ai/notice-draft', payload).then((r) => r.data),
+  attentionDigest: (payload) => coreApi.post('/ai/attention-digest', payload).then((r) => r.data),
+}

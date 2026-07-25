@@ -43,7 +43,7 @@ public class AssistantService {
             2) If the user asks something unrelated (e.g. physics, sports, news, coding, jokes),
                politely say you only help with SocietyWale / housing-society management, then offer
                1–2 relevant ways you can help instead.
-            3) Never invent features SocietyWale does not have (visitor QR gates, Razorpay checkout,
+            3) Never invent features SocietyWale does not have (visitor QR gates,
                facility booking, staff/payroll apps, mobile native apps unless asked generally).
             4) Prefer actionable next steps: Sign up, Contact, Features, Dashboard workflows.
             5) Do not ask for passwords or OTP codes.
@@ -67,13 +67,19 @@ public class AssistantService {
         return !apiKey.isBlank();
     }
 
-    @SuppressWarnings("unchecked")
-    public ChatResponse chat(ChatRequest req) {
-        if (!isConfigured()) {
-            throw new BadRequestException(
-                    "Assistant is not configured yet. Add GROQ_API_KEY on the server and restart core-service.");
+    /** Single-turn completion for admin AI tools (dues draft, notice writer, digest). */
+    public String complete(String systemPrompt, String userMessage, double temperature, int maxTokens) {
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", systemPrompt == null ? "" : systemPrompt.trim()));
+        String user = userMessage == null ? "" : userMessage.trim();
+        if (user.isBlank()) {
+            throw new BadRequestException("A prompt is required.");
         }
+        messages.add(Map.of("role", "user", "content", user));
+        return callGroq(messages, temperature, maxTokens);
+    }
 
+    public ChatResponse chat(ChatRequest req) {
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
 
@@ -89,11 +95,20 @@ public class AssistantService {
             }
         }
         messages.add(Map.of("role", "user", "content", req.message().trim()));
+        return new ChatResponse(callGroq(messages, 0.35, 450));
+    }
+
+    @SuppressWarnings("unchecked")
+    private String callGroq(List<Map<String, String>> messages, double temperature, int maxTokens) {
+        if (!isConfigured()) {
+            throw new BadRequestException(
+                    "AI is not configured yet. Add GROQ_API_KEY on the server and restart core-service.");
+        }
 
         Map<String, Object> body = Map.of(
                 "model", model,
-                "temperature", 0.35,
-                "max_tokens", 450,
+                "temperature", temperature,
+                "max_tokens", maxTokens,
                 "messages", messages
         );
 
@@ -107,24 +122,24 @@ public class AssistantService {
                     .body(Map.class);
 
             if (response == null || response.get("choices") == null) {
-                throw new BadRequestException("Assistant did not return a reply. Please try again.");
+                throw new BadRequestException("AI did not return a reply. Please try again.");
             }
             List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
             if (choices.isEmpty()) {
-                throw new BadRequestException("Assistant did not return a reply. Please try again.");
+                throw new BadRequestException("AI did not return a reply. Please try again.");
             }
             Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
             String reply = message == null ? null : String.valueOf(message.getOrDefault("content", "")).trim();
             if (reply == null || reply.isBlank() || "null".equals(reply)) {
-                throw new BadRequestException("Assistant did not return a reply. Please try again.");
+                throw new BadRequestException("AI did not return a reply. Please try again.");
             }
-            return new ChatResponse(reply);
+            return reply;
         } catch (RestClientResponseException ex) {
             log.warn("Groq API error status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
-            throw new BadRequestException("Assistant could not reach Groq. Check GROQ_API_KEY and try again.");
+            throw new BadRequestException("AI could not reach Groq. Check GROQ_API_KEY and try again.");
         } catch (RestClientException ex) {
             log.warn("Groq API request failed: {}", ex.getMessage());
-            throw new BadRequestException("Assistant is temporarily unavailable. Please try again shortly.");
+            throw new BadRequestException("AI is temporarily unavailable. Please try again shortly.");
         }
     }
 }

@@ -6,6 +6,8 @@ import {
   MemberService,
 } from '../../api/services'
 import { Alert, SectionTitle, StatusBadge } from '../../components/ui/Feedback'
+import DuesWhatsAppDraftButton from '../../components/DuesWhatsAppDraftButton'
+import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { getApiErrorMessage } from '../../utils/apiError'
 import { inr, monthName } from '../../utils/share'
@@ -70,6 +72,7 @@ function effectiveMemberAmount(defaults, member, year, month) {
 }
 
 export default function MaintenanceTracker() {
+  const { user } = useAuth()
   const toast = useToast()
   const [charges, setCharges] = useState([])
   const [members, setMembers] = useState([])
@@ -816,6 +819,7 @@ export default function MaintenanceTracker() {
       )}
 
       {!needsModeChoice && (
+      <div className="min-w-0 max-w-full space-y-6">
       <div className="grid min-w-0 max-w-full grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-1">
           <div className="card">
@@ -884,20 +888,20 @@ export default function MaintenanceTracker() {
             </form>
           </div>
         </div>
-        <div className="lg:col-span-2 space-y-6">
+        <div className="min-w-0 lg:col-span-2">
           <div className="card">
             <SectionTitle
               title="Member-wise summary"
               subtitle="Who has paid and who still owes"
               action={
-                <div className="flex flex-wrap gap-2">
+                <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <input
                     className="input w-full sm:w-44"
                     placeholder="Search name / flat"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
-                  <select className="input w-36" value={flatFilter} onChange={(e) => setFlatFilter(e.target.value)}>
+                  <select className="input w-full sm:w-36" value={flatFilter} onChange={(e) => setFlatFilter(e.target.value)}>
                     <option value="">All flats</option>
                     {flats.map((f) => <option key={f} value={f}>{f}</option>)}
                   </select>
@@ -936,33 +940,35 @@ export default function MaintenanceTracker() {
               {byMember.length === 0 && <p className="text-sm text-gray-400">No records yet.</p>}
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="card">
+          <div className="card min-w-0">
             <SectionTitle
               title="Maintenance Tracker"
               subtitle={`${monthName(trackerMonth)} ${trackerYear} · ${periodStats.paid} paid · ${periodStats.pending} not paid · ${periodStats.total} members`}
               action={
-                <div className="flex flex-wrap items-end gap-2">
-                  <div>
+                <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
+                  <div className="min-w-0">
                     <label className="label !mb-1">Month</label>
-                    <select className="input w-36" value={trackerMonth} onChange={(e) => setTrackerMonth(Number(e.target.value))}>
+                    <select className="input w-full sm:w-36" value={trackerMonth} onChange={(e) => setTrackerMonth(Number(e.target.value))}>
                       {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                         <option key={m} value={m}>{monthName(m)}</option>
                       ))}
                     </select>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <label className="label !mb-1">Year</label>
                     <input
                       type="number"
-                      className="input w-24"
+                      className="input w-full sm:w-24"
                       value={trackerYear}
                       onChange={(e) => setTrackerYear(Number(e.target.value))}
                     />
                   </div>
-                  <div>
+                  <div className="col-span-2 min-w-0 sm:col-auto">
                     <label className="label !mb-1">Mark paid via</label>
-                    <select className="input w-32" value={trackerPaymentMode} onChange={(e) => setTrackerPaymentMode(e.target.value)}>
+                    <select className="input w-full sm:w-32" value={trackerPaymentMode} onChange={(e) => setTrackerPaymentMode(e.target.value)}>
                       <option value="CASH">Cash</option>
                       <option value="ONLINE">Online</option>
                     </select>
@@ -970,7 +976,7 @@ export default function MaintenanceTracker() {
                 </div>
               }
             />
-            <p className="mb-4 text-sm text-slate-500">
+            <p className="mb-4 text-sm leading-6 text-slate-500">
               All members for {monthName(trackerMonth)} {trackerYear}.{' '}
               {isVariable
                 ? 'Amount comes from each member’s default when not yet recorded.'
@@ -979,58 +985,129 @@ export default function MaintenanceTracker() {
               Default status is <span className="font-semibold text-amber-700">not paid</span> until marked paid.
               Payment mode appears only for paid members.
             </p>
-            <div className="table-scroll">
-              <table className="w-full min-w-[52rem] text-sm">
+
+            {/* Phones / tablets: stacked cards — no sideways scroll */}
+            <div className="space-y-3 lg:hidden">
+              {periodRows.map((row) => (
+                <article key={row.key} className="min-w-0 rounded-xl border border-slate-100 bg-slate-50/40 p-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-950 break-words">{row.memberName}</p>
+                      <p className="mt-0.5 text-sm text-slate-500">
+                        Flat {row.flatNumber}
+                        {row.memberMobile ? ` · ${row.memberMobile}` : ''}
+                      </p>
+                      {row.memberEmail && (
+                        <p className="mt-0.5 break-all text-xs text-slate-400">{row.memberEmail}</p>
+                      )}
+                    </div>
+                    <StatusBadge status={row.status === 'PAID' ? 'PAID' : 'PENDING'} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-lg bg-white px-2.5 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Period</p>
+                      <p className="mt-0.5 font-medium text-slate-800">{monthName(row.billingMonth)} {row.billingYear}</p>
+                    </div>
+                    <div className="rounded-lg bg-white px-2.5 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Amount</p>
+                      <p className="mt-0.5 font-semibold text-slate-900">
+                        {row.amount > 0 ? `₹${Number(row.amount).toLocaleString('en-IN')}` : '—'}
+                      </p>
+                    </div>
+                    <div className="col-span-2 rounded-lg bg-white px-2.5 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Payment mode</p>
+                      <p className="mt-0.5 text-slate-800">
+                        {row.status === 'PAID'
+                          ? (formatPaymentMode(row.paymentMode) || '—')
+                          : '—'}
+                      </p>
+                      {row.isVirtual && row.status !== 'PAID' && (
+                        <p className="mt-1 text-[11px] text-slate-400">Not recorded yet</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      disabled={trackerBusyKey === row.key}
+                      onClick={() => togglePeriodStatus(row)}
+                      className={`${row.status === 'PENDING' ? 'btn-success' : 'btn-secondary'} w-full !text-sm sm:w-auto`}
+                    >
+                      {trackerBusyKey === row.key
+                        ? 'Updating…'
+                        : row.status === 'PENDING'
+                          ? 'Mark Paid'
+                          : 'Mark Not Paid'}
+                    </button>
+                    {row.status === 'PENDING' && (
+                      <DuesWhatsAppDraftButton row={row} societyName={user?.societyName} />
+                    )}
+                  </div>
+                </article>
+              ))}
+              {periodRows.length === 0 && (
+                <p className="py-4 text-center text-sm text-gray-400">No members in directory yet. Add members first.</p>
+              )}
+            </div>
+
+            {/* Desktop: full-width table */}
+            <div className="hidden table-scroll lg:block">
+              <table className="w-full min-w-0 text-sm">
                 <thead>
                   <tr className="border-b text-left text-gray-500">
-                    <th className="py-2 pr-4">Member</th>
-                    <th className="py-2 pr-4">Flat</th>
-                    <th className="py-2 pr-4">Period</th>
-                    <th className="py-2 pr-4">Amount</th>
-                    <th className="py-2 pr-4">Status</th>
-                    <th className="py-2 pr-4">Payment mode</th>
-                    <th className="py-2 pr-4">Action</th>
+                    <th className="py-2 pr-3 whitespace-nowrap">Member</th>
+                    <th className="py-2 pr-3 whitespace-nowrap">Flat</th>
+                    <th className="py-2 pr-3 whitespace-nowrap">Period</th>
+                    <th className="py-2 pr-3 whitespace-nowrap">Amount</th>
+                    <th className="py-2 pr-3 whitespace-nowrap">Status</th>
+                    <th className="py-2 pr-3 whitespace-nowrap">Payment mode</th>
+                    <th className="py-2 pr-3 whitespace-nowrap">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {periodRows.map((row) => (
                     <tr key={row.key} className="border-b last:border-0 align-top">
-                      <td className="py-3 pr-4">
-                        <p className="font-semibold text-slate-950">{row.memberName}</p>
-                        <p className="text-xs text-slate-500">{row.memberMobile || 'No mobile'}</p>
-                        <p className="text-xs text-slate-400">{row.memberEmail || 'No email'}</p>
+                      <td className="min-w-0 py-3 pr-3">
+                        <p className="font-semibold text-slate-950 break-words">{row.memberName}</p>
+                        <p className="text-xs text-slate-500 break-all">{row.memberMobile || 'No mobile'}</p>
+                        <p className="text-xs text-slate-400 break-all">{row.memberEmail || 'No email'}</p>
                       </td>
-                      <td className="py-3 pr-4 font-medium">{row.flatNumber}</td>
-                      <td className="py-3 pr-4">{monthName(row.billingMonth)} {row.billingYear}</td>
-                      <td className="py-3 pr-4 font-semibold">
+                      <td className="py-3 pr-3 font-medium whitespace-nowrap">{row.flatNumber}</td>
+                      <td className="py-3 pr-3 whitespace-nowrap">{monthName(row.billingMonth)} {row.billingYear}</td>
+                      <td className="py-3 pr-3 font-semibold whitespace-nowrap">
                         {row.amount > 0 ? `₹${Number(row.amount).toLocaleString('en-IN')}` : '—'}
                       </td>
-                      <td className="py-3 pr-4">
+                      <td className="py-3 pr-3 whitespace-nowrap">
                         <StatusBadge status={row.status === 'PAID' ? 'PAID' : 'PENDING'} />
                         {row.isVirtual && row.status !== 'PAID' && (
                           <p className="mt-1 text-[11px] text-slate-400">Not recorded yet</p>
                         )}
                       </td>
-                      <td className="py-3 pr-4">
+                      <td className="py-3 pr-3 whitespace-nowrap">
                         {row.status === 'PAID' ? (
                           <span className="badge bg-sky-50 text-sky-700">{formatPaymentMode(row.paymentMode) || '—'}</span>
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}
                       </td>
-                      <td className="py-3 pr-4">
-                        <button
-                          type="button"
-                          disabled={trackerBusyKey === row.key}
-                          onClick={() => togglePeriodStatus(row)}
-                          className={`${row.status === 'PENDING' ? 'btn-success' : 'btn-secondary'} !px-2.5 !py-1.5 !text-xs`}
-                        >
-                          {trackerBusyKey === row.key
-                            ? 'Updating…'
-                            : row.status === 'PENDING'
-                              ? 'Mark Paid'
-                              : 'Mark Not Paid'}
-                        </button>
+                      <td className="py-3 pr-3">
+                        <div className="max-w-md space-y-1">
+                          <button
+                            type="button"
+                            disabled={trackerBusyKey === row.key}
+                            onClick={() => togglePeriodStatus(row)}
+                            className={`${row.status === 'PENDING' ? 'btn-success' : 'btn-secondary'} !px-2.5 !py-1.5 !text-xs`}
+                          >
+                            {trackerBusyKey === row.key
+                              ? 'Updating…'
+                              : row.status === 'PENDING'
+                                ? 'Mark Paid'
+                                : 'Mark Not Paid'}
+                          </button>
+                          {row.status === 'PENDING' && (
+                            <DuesWhatsAppDraftButton row={row} societyName={user?.societyName} />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1045,7 +1122,6 @@ export default function MaintenanceTracker() {
               </table>
             </div>
           </div>
-        </div>
       </div>
       )}
     </div>

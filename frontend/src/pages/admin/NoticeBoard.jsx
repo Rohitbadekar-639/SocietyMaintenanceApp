@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NoticeService, RuleService } from '../../api/services'
 import { Alert, SectionTitle } from '../../components/ui/Feedback'
+import NoticeAiWriter from '../../components/NoticeAiWriter'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { getApiErrorMessage } from '../../utils/apiError'
@@ -199,6 +200,20 @@ export default function NoticeBoard() {
             title={editingNoticeId ? 'Edit announcement' : 'Post announcement'}
             subtitle={editingNoticeId ? 'Update and save changes instantly' : 'Broadcast to all members'}
           />
+          {!editingNoticeId && (
+            <NoticeAiWriter
+              disabled={busy === 'notice'}
+              onApply={(draft) => {
+                setNoticeForm({
+                  title: draft.title || '',
+                  body: draft.body || '',
+                  priority: draft.priority || 'NORMAL',
+                })
+                setNoticeFieldErrors({})
+                setError('')
+              }}
+            />
+          )}
           <form onSubmit={saveNotice} className="space-y-3" noValidate>
             <div>
               <label className="label">Title</label>

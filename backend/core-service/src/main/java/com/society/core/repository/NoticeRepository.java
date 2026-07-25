@@ -13,4 +13,6 @@ public interface NoticeRepository extends JpaRepository<Notice, UUID> {
     List<Notice> findBySocietyIdAndNotifiedAtIsNotNullOrderByNotifiedAtDesc(UUID societyId);
 
     Optional<Notice> findByIdAndSocietyId(UUID id, UUID societyId);
+
+    long countBySocietyIdAndNotifiedAtIsNull(UUID societyId);
 }

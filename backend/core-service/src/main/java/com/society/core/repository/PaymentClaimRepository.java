@@ -13,4 +13,5 @@ public interface PaymentClaimRepository extends JpaRepository<PaymentClaim, UUID
     List<PaymentClaim> findBySocietyIdAndStatusOrderByCreatedAtDesc(UUID societyId, String status);
     Optional<PaymentClaim> findByIdAndSocietyId(UUID id, UUID societyId);
     boolean existsBySocietyIdAndChargeIdAndStatus(UUID societyId, UUID chargeId, String status);
+    long countBySocietyIdAndStatus(UUID societyId, String status);
 }
