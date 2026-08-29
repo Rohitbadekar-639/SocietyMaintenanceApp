@@ -6,15 +6,82 @@ import { getApiErrorMessage } from '../utils/apiError'
 
 const STARTERS = [
   'What does SocietyWale do?',
+  'How can SocietyWale help my society?',
   'How do we get started?',
-  'What can committees manage?',
-  'How do I contact you?',
+  'What is the pricing?',
 ]
 
 const WELCOME =
-  'Hi — I am the SocietyWale assistant. Ask me anything about our society management app, onboarding, features, or support.'
+  'Namaste! I represent SocietyWale — your AI-powered society management platform for Indian housing societies. Ask about features, how we help committees and residents, signup, pricing, or support.'
 
-/** Sparkle / AI mark — reads as smart assistant, not generic support chat */
+/** Render **bold**, bullet lines, and paragraphs for bot replies — no raw markdown in UI. */
+function formatInline(text) {
+  const parts = String(text || '').split(/(\*\*[^*]+\*\*)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={i} className="font-semibold text-slate-900">
+          {part.slice(2, -2)}
+        </strong>
+      )
+    }
+    return part
+  })
+}
+
+function BotMessageContent({ text }) {
+  const lines = String(text || '').split('\n')
+  const blocks = []
+  let listItems = []
+
+  function flushList() {
+    if (listItems.length === 0) return
+    blocks.push(
+      <ul key={`ul-${blocks.length}`} className="mt-1.5 list-none space-y-1.5 pl-0">
+        {listItems.map((item, idx) => (
+          <li key={idx} className="flex gap-2 leading-6">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600" aria-hidden="true" />
+            <span className="min-w-0">{formatInline(item)}</span>
+          </li>
+        ))}
+      </ul>,
+    )
+    listItems = []
+  }
+
+  lines.forEach((line, lineIdx) => {
+    const trimmed = line.trim()
+    const bullet = trimmed.match(/^[-*•]\s+(.*)$/)
+    const numbered = trimmed.match(/^\d+[.)]\s+(.*)$/)
+
+    if (bullet) {
+      listItems.push(bullet[1])
+      return
+    }
+    if (numbered) {
+      listItems.push(numbered[1])
+      return
+    }
+    flushList()
+    if (!trimmed) {
+      if (lineIdx > 0 && lineIdx < lines.length - 1) {
+        blocks.push(<div key={`sp-${lineIdx}`} className="h-1" />)
+      }
+      return
+    }
+    blocks.push(
+      <p key={`p-${lineIdx}`} className={blocks.length === 0 ? '' : 'mt-2'}>
+        {formatInline(trimmed)}
+      </p>,
+    )
+  })
+  flushList()
+
+  if (blocks.length === 0) {
+    return <p>{formatInline(text)}</p>
+  }
+  return <div className="ai-chat-prose">{blocks}</div>
+}
 function AiIcon({ className = 'h-6 w-6' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
@@ -102,7 +169,7 @@ export default function AiAssistant() {
       setMessages((prev) => [...prev, { role: 'bot', text: res.reply || 'Sorry — I could not answer that.' }])
     } catch (err) {
       const msg = getApiErrorMessage(err, '')
-      if (/not configured|GROQ_API_KEY/i.test(msg)) {
+      if (/not configured|OPENAI_API_KEY/i.test(msg)) {
         setConfigured(false)
         setMessages((prev) => [
           ...prev,
@@ -138,7 +205,7 @@ export default function AiAssistant() {
   return (
     <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1.25rem,env(safe-area-inset-right))] z-40 flex max-w-[calc(100vw-1.5rem)] flex-col items-end gap-3">
       {open && (
-        <div className="ai-panel-enter flex h-[min(440px,calc(100dvh-8rem))] w-[min(100vw-1.5rem,380px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20">
+        <div className="ai-panel-enter flex h-[min(560px,calc(100dvh-5.5rem))] w-[min(100vw-1.5rem,400px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20">
           <div className="bg-[linear-gradient(135deg,#102A43,#0f766e)] px-4 py-3 text-white">
             <div className="flex min-w-0 items-center gap-3">
               <span className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-orange-400 to-teal-600 text-white shadow">
@@ -153,20 +220,26 @@ export default function AiAssistant() {
                   </span>
                 </p>
                 <p className="truncate text-xs text-teal-100">
-                  {configured === false ? 'Setup pending · contact support' : 'Ask about features, onboarding & support'}
+                  {configured === false ? 'Setup pending · contact support' : 'Official SocietyWale guide · features, signup & support'}
                 </p>
               </div>
             </div>
           </div>
-          <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
+          <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3.5 py-3.5 sm:px-4">
             {messages.map((m, i) => (
               <div
                 key={`${m.role}-${i}`}
-                className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm leading-6 ${
-                  m.role === 'user' ? 'ml-auto bg-orange-500 text-white' : 'bg-slate-50 text-slate-700'
+                className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${
+                  m.role === 'user'
+                    ? 'ml-auto bg-orange-500 text-white shadow-sm'
+                    : 'border border-slate-100 bg-slate-50/90 text-slate-700 shadow-sm'
                 }`}
               >
-                <p className="whitespace-pre-wrap">{m.text}</p>
+                {m.role === 'user' ? (
+                  <p className="whitespace-pre-wrap">{m.text}</p>
+                ) : (
+                  <BotMessageContent text={m.text} />
+                )}
                 {m.link?.to && (
                   <Link to={m.link.to} className="mt-2 inline-block text-xs font-bold text-orange-600 hover:text-orange-700">
                     {m.link.label} →

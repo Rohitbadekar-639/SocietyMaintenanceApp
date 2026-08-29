@@ -13,53 +13,111 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Service
 public class AssistantService {
 
     private static final Logger log = LoggerFactory.getLogger(AssistantService.class);
 
+    /**
+     * Official SocietyWale knowledge base — keep in sync with public site & product.
+     * The assistant speaks as SocietyWale (we/our), not a generic AI.
+     */
     private static final String SYSTEM_PROMPT = """
-            You are SocietyWale Assistant — the official website chatbot for SocietyWale
-            (https://societywale.in), a housing-society management product for India.
+            You are the official SocietyWale Assistant on https://societywale.in — the AI-powered \
+            housing-society management platform built for Indian RWAs, cooperative societies, and gated communities.
 
-            Audience: managing committee (secretary, treasurer, chairman), admins, and residents.
-            Tone: professional, warm, clear. Short answers (2–6 sentences). No developer jargon.
+            VOICE: Speak as SocietyWale ("we", "our product"). Be warm, confident, and helpful — like a knowledgeable \
+            sales + support person on our team. Never say you are ChatGPT or a generic AI.
 
-            PRODUCT FACTS (stay inside this domain):
-            - Committees can: create a society workspace, share a society code, manage members,
-              publish committee contacts, set maintenance amount, track paid/pending dues,
-              review payment claims, publish bank/UPI details, log expenses, post notices & rules,
-              track complaints, store audit files, generate financial reports/PDFs, and view Analytics.
-            - Residents can: join with society code, view dues/notices/bank details/rules,
-              raise payment claims and complaints, and view reports the committee shares.
-            - Signup: committee uses Create society workspace; residents use Member signup + society code.
-            - Contact: societywale.in@gmail.com | +91 97300 96390 | +91 72187 79953.
+            UNDERSTAND QUESTIONS: Visitors may use informal English, Hinglish, or typos (e.g. "what benefit me", \
+            "how it works", "kya features hai"). Interpret intent generously when it relates to societies or our product.
 
-            STRICT RULES:
-            1) Answer questions about SocietyWale, society operations, onboarding, pricing conversations,
-               features, security/privacy at a business level, and how committees/residents use the app.
-            2) If the user asks something unrelated (e.g. physics, sports, news, coding, jokes),
-               politely say you only help with SocietyWale / housing-society management, then offer
-               1–2 relevant ways you can help instead.
-            3) Never invent features SocietyWale does not have (visitor QR gates,
-               facility booking, staff/payroll apps, mobile native apps unless asked generally).
-            4) Prefer actionable next steps: Sign up, Contact, Features, Dashboard workflows.
-            5) Do not ask for passwords or OTP codes.
+            WHO WE HELP:
+            - Managing committees (secretary, treasurer, chairman) who run day-to-day society operations.
+            - Residents/members who need dues, notices, bank details, and a way to notify payments or raise complaints.
+
+            WHAT SOCIETYWALE INCLUDES (today — do not invent beyond this):
+            - Member directory (flat-wise contacts, email, mobile)
+            - Committee directory (chairman, secretary, treasurer contacts)
+            - Maintenance tracking (rates, paid vs pending by flat/month, collection history)
+            - Payment claims (members submit cash/online payment with reference; committee verifies and marks paid)
+            - Society bank / UPI account publishing
+            - Expense logging for committee spending
+            - Notices & society rules (post, edit, notify members in-app)
+            - Complaint tracker (open/update/close with clear status)
+            - Financial reports — monthly/annual branded PDF downloads
+            - Audit document storage
+            - Analytics dashboard (admin)
+            - AI tools for admins: WhatsApp dues reminder drafts (English/Hindi/Marathi), AI notice writer, committee digest
+
+            HOW TO GET STARTED:
+            - Committee / new society: "Create society workspace" on our site → pay annual subscription → admin dashboard unlocks.
+            - Residents: "Member signup" with society code from their committee + flat details. Default password is mobile; \
+            email recommended for login and password reset.
+            - After signup: add members, set maintenance, publish bank/UPI, post notices, track collections.
+
+            PRICING (public offer — mention when asked):
+            - Annual society workspace subscription with introductory offer around ₹4,999/year (list price shown as ₹9,999 on signup).
+            - For exact current pricing or a demo for your society, suggest Contact page or call/email us.
+
+            TRUST & SECURITY (when asked):
+            - Each society has its own private workspace; data stays within that society.
+            - Secure sign-in; committee controls writes; residents see appropriate read-only views.
+            - Ad-free product focused on real society operations, not ads.
+
+            CONTACT (give when user wants human help, demo, or custom onboarding):
+            - Email: societywale.in@gmail.com
+            - Phone: +91 97300 96390 or +91 72187 79953
+            - Contact page on societywale.in
+
+            HOUSING SOCIETY TOPICS (allowed): maintenance collection, AGM prep, committee roles, RWAs, bye-laws style \
+            communication, pending dues follow-up, transparency between committee and residents — tie answers back to how \
+            SocietyWale helps when relevant.
+
+            OFF-TOPIC (sports, celebrities, coding homework, recipes, politics, unrelated trivia):
+            Politely decline in one sentence, then offer 2 concrete ways we can help (e.g. features overview, signup steps, contact team). \
+            Do NOT answer the unrelated part.
+
+            STYLE:
+            - Default 3–5 short sentences. Use a blank line then dash-prefixed lines for lists (e.g. "- Member directory: ...").
+            - Do NOT use markdown symbols like ** or ## — write plain professional text only.
+            - End with a helpful next step (Sign up, Contact us, or ask a follow-up) when appropriate.
+            - Never ask for passwords or OTPs. Never promise features we do not have (visitor QR gates, facility booking, payroll, native mobile app).
             """;
+
+    /** Only block obvious credit-wasters — never block vague or benefit/how/what questions. */
+    private static final Pattern[] OFF_TOPIC_DENY = {
+            Pattern.compile("\\b(write|generate|debug)\\s+(me\\s+)?(a\\s+)?(python|java|javascript|code|script|program)\\b"),
+            Pattern.compile("\\b(homework|assignment)\\s+(help|solution)\\b"),
+            Pattern.compile("\\b(ipl|cricket\\s+world\\s+cup|football\\s+score|nba\\s+finals)\\b"),
+            Pattern.compile("\\b(bitcoin|crypto\\s+price|stock\\s+market\\s+tip)\\b"),
+            Pattern.compile("\\b(tell\\s+me\\s+a\\s+joke|write\\s+a\\s+poem)\\b"),
+            Pattern.compile("\\b(weather\\s+forecast|recipe\\s+for)\\b"),
+    };
+
+    private static final String OFF_TOPIC_REPLY = """
+            Thanks for reaching out! I'm the SocietyWale assistant — I help with our society management platform, \
+            onboarding, features, and support for Indian housing societies.
+
+            Ask me how SocietyWale can help your committee, what's included, or how to sign up. \
+            Or contact us: societywale.in@gmail.com | +91 97300 96390.""";
 
     private final RestClient restClient;
     private final String apiKey;
     private final String model;
 
     public AssistantService(
-            @Value("${app.groq.api-key:}") String apiKey,
-            @Value("${app.groq.model:llama-3.3-70b-versatile}") String model) {
+            @Value("${app.openai.api-key:}") String apiKey,
+            @Value("${app.openai.model:gpt-4o-mini}") String model) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
-        this.model = model;
+        this.model = model == null || model.isBlank() ? "gpt-4o-mini" : model.trim();
         this.restClient = RestClient.builder()
-                .baseUrl("https://api.groq.com/openai/v1")
+                .baseUrl("https://api.openai.com/v1")
                 .build();
     }
 
@@ -76,15 +134,26 @@ public class AssistantService {
             throw new BadRequestException("A prompt is required.");
         }
         messages.add(Map.of("role", "user", "content", user));
-        return callGroq(messages, temperature, maxTokens);
+        return callOpenAi(messages, temperature, maxTokens);
     }
 
     public ChatResponse chat(ChatRequest req) {
+        String question = req.message().trim();
+        if (question.isBlank()) {
+            return new ChatResponse(
+                    "Please ask a question about SocietyWale — features, pricing, signup, or how we help housing societies.");
+        }
+
+        Optional<String> blocked = tryBlockObviousOffTopic(question);
+        if (blocked.isPresent()) {
+            return new ChatResponse(blocked.get());
+        }
+
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
 
         if (req.history() != null) {
-            int start = Math.max(0, req.history().size() - 10);
+            int start = Math.max(0, req.history().size() - 8);
             for (int i = start; i < req.history().size(); i++) {
                 ChatMessage m = req.history().get(i);
                 String role = "assistant".equalsIgnoreCase(m.role()) ? "assistant" : "user";
@@ -94,15 +163,26 @@ public class AssistantService {
                 }
             }
         }
-        messages.add(Map.of("role", "user", "content", req.message().trim()));
-        return new ChatResponse(callGroq(messages, 0.35, 450));
+        messages.add(Map.of("role", "user", "content", question));
+        return new ChatResponse(callOpenAi(messages, 0.35, 380));
+    }
+
+    /** Deny-list only — vague or benefit/how questions always reach OpenAI. */
+    private Optional<String> tryBlockObviousOffTopic(String message) {
+        String q = message.toLowerCase(Locale.ROOT);
+        for (Pattern pattern : OFF_TOPIC_DENY) {
+            if (pattern.matcher(q).find()) {
+                return Optional.of(OFF_TOPIC_REPLY.trim());
+            }
+        }
+        return Optional.empty();
     }
 
     @SuppressWarnings("unchecked")
-    private String callGroq(List<Map<String, String>> messages, double temperature, int maxTokens) {
+    private String callOpenAi(List<Map<String, String>> messages, double temperature, int maxTokens) {
         if (!isConfigured()) {
             throw new BadRequestException(
-                    "AI is not configured yet. Add GROQ_API_KEY on the server and restart core-service.");
+                    "AI is not configured yet. Add OPENAI_API_KEY on the server and restart core-service.");
         }
 
         Map<String, Object> body = Map.of(
@@ -135,10 +215,10 @@ public class AssistantService {
             }
             return reply;
         } catch (RestClientResponseException ex) {
-            log.warn("Groq API error status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
-            throw new BadRequestException("AI could not reach Groq. Check GROQ_API_KEY and try again.");
+            log.warn("OpenAI API error status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            throw new BadRequestException("AI could not reach OpenAI. Check OPENAI_API_KEY and billing, then try again.");
         } catch (RestClientException ex) {
-            log.warn("Groq API request failed: {}", ex.getMessage());
+            log.warn("OpenAI API request failed: {}", ex.getMessage());
             throw new BadRequestException("AI is temporarily unavailable. Please try again shortly.");
         }
     }

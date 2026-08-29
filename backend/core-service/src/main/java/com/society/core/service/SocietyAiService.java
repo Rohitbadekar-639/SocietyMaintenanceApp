@@ -95,7 +95,7 @@ public class SocietyAiService {
                 amount
         );
 
-        String message = assistantService.complete(system, user, 0.4, 280).trim();
+        String message = assistantService.complete(system, user, 0.35, 240).trim();
         return new DuesWhatsAppDraftResponse(language, message);
     }
 
@@ -129,7 +129,7 @@ public class SocietyAiService {
                 priorityHint == null ? "choose appropriately" : priorityHint
         );
 
-        String raw = assistantService.complete(system, user, 0.35, 500).trim();
+        String raw = assistantService.complete(system, user, 0.3, 380).trim();
         JsonNode node = parseJsonObject(raw);
         String title = textOrEmpty(node, "title");
         String body = textOrEmpty(node, "body");
@@ -250,7 +250,7 @@ public class SocietyAiService {
                         .reduce((a, b) -> a + "; " + b).orElse("none")
         );
 
-        String raw = assistantService.complete(system, user, 0.3, 320).trim();
+        String raw = assistantService.complete(system, user, 0.25, 260).trim();
         JsonNode node = parseJsonObject(raw);
         String summary = textOrEmpty(node, "summary");
         if (summary.isBlank()) {

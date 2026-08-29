@@ -9,3 +9,8 @@ backend/*/target/
 package-lock.json
 .env.example
 deploy/aws/.env
+
+# SSH keys — never commit (local deploy access only)
+*.pem
+*.ppk
+deploy/aws/keys/
