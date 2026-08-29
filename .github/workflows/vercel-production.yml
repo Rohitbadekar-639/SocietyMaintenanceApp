@@ -1,0 +1,52 @@
+# Deploy frontend to Vercel on every push to main.
+#
+# One-time setup (pick one):
+# A) Deploy Hook: Vercel → societywale → Settings → Git → Deploy Hooks → main
+#    → GitHub repo → Settings → Secrets → VERCEL_DEPLOY_HOOK
+# B) Vercel token: https://vercel.com/account/tokens → GitHub secret VERCEL_TOKEN
+
+name: Vercel Production Deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'vercel.json'
+      - '.github/workflows/vercel-production.yml'
+
+env:
+  VERCEL_ORG_ID: team_isjURodbVUy5cpPDmtlBDkGI
+  VERCEL_PROJECT_ID: prj_VV3IkON9uoyxOePlTad1uwD9ufHM
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploy to Vercel
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -e
+          if [ -n "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "Triggering Vercel deploy hook..."
+            curl -fsS -X POST "$VERCEL_DEPLOY_HOOK"
+            exit 0
+          fi
+          if [ -n "$VERCEL_TOKEN" ]; then
+            npm install -g vercel@latest
+            cd frontend
+            vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+            vercel build --prod --token="$VERCEL_TOKEN"
+            vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+            exit 0
+          fi
+          echo "::warning::No VERCEL_DEPLOY_HOOK or VERCEL_TOKEN secret — skipping Vercel deploy."
+          echo "Add a secret in GitHub repo Settings, or deploy manually from Vercel dashboard."
