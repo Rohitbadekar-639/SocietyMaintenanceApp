@@ -8,6 +8,7 @@ import { AiLanguageSelect } from './AiLanguageSelect'
 
 /**
  * Admin overview card — AI “needs attention” digest from live society stats.
+ * Pending dues match Maintenance Tracker (includes flats not yet recorded as charges).
  */
 export default function AttentionDigestCard({ onNavigate }) {
   const { user } = useAuth()
@@ -17,12 +18,12 @@ export default function AttentionDigestCard({ onNavigate }) {
   const [error, setError] = useState('')
   const [data, setData] = useState(null)
 
-  async function loadDigest({ notify = false } = {}) {
+  async function loadDigest({ notify = false, lang = language } = {}) {
     setBusy(true)
     setError('')
     try {
       const res = await SocietyAiService.attentionDigest({
-        language,
+        language: lang,
         societyName: user?.societyName || 'Your society',
       })
       setData(res)
@@ -34,10 +35,16 @@ export default function AttentionDigestCard({ onNavigate }) {
     }
   }
 
+  // Fresh live stats whenever Overview mounts or language changes.
   useEffect(() => {
-    loadDigest()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount; refresh via button
-  }, [])
+    loadDigest({ lang: language })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: refresh on language / mount
+  }, [language, user?.societyName])
+
+  const stats = data?.stats
+  const periodLabel = stats
+    ? `${monthName(stats.billingMonth)} ${stats.billingYear}`
+    : ''
 
   return (
     <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/[.03]">
@@ -46,7 +53,9 @@ export default function AttentionDigestCard({ onNavigate }) {
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[.14em] text-orange-300">Powered by AI</p>
             <h2 className="mt-1 text-lg font-extrabold tracking-tight sm:text-xl">Committee Digest</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-300">Live priorities for collections, claims, complaints and notices.</p>
+            <p className="mt-1 text-sm leading-6 text-slate-300">
+              Live priorities from Maintenance Tracker, claims, complaints and notices — refreshed when you open Overview.
+            </p>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[11rem] sm:max-w-[14rem]">
             <AiLanguageSelect value={language} onChange={setLanguage} disabled={busy} className="!bg-white !py-2.5 text-slate-900" />
@@ -65,17 +74,27 @@ export default function AttentionDigestCard({ onNavigate }) {
       <div className="space-y-4 p-4 sm:p-5">
         {error && <p className="text-sm font-medium text-red-600 break-words">{error}</p>}
 
-        {data?.stats && (
+        {stats && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
-            <MiniStat label="Pending dues" value={String(data.stats.pendingDuesCount || 0)} />
-            <MiniStat label="Dues amount" value={inr(data.stats.pendingDuesAmount)} />
-            <MiniStat label="Claims" value={String(data.stats.submittedClaims || 0)} />
-            <MiniStat label="Open complaints" value={String(data.stats.openComplaints || 0)} />
             <MiniStat
-              label="Period"
-              value={`${monthName(data.stats.billingMonth)} ${data.stats.billingYear}`}
+              label={`Pending (${periodLabel})`}
+              value={String(stats.currentMonthPendingCount ?? stats.pendingDuesCount ?? 0)}
             />
+            <MiniStat
+              label={`Amount (${periodLabel})`}
+              value={inr(stats.currentMonthPendingAmount ?? stats.pendingDuesAmount)}
+            />
+            <MiniStat label="Outstanding till date" value={String(stats.pendingDuesCount || 0)} />
+            <MiniStat label="Till-date amount" value={inr(stats.pendingDuesAmount)} />
+            <MiniStat label="Open complaints" value={String(stats.openComplaints || 0)} />
           </div>
+        )}
+
+        {stats && (
+          <p className="text-xs text-slate-500">
+            Claims awaiting review: {stats.submittedClaims || 0}
+            {stats.hasBankAccount === false ? ' · Bank/UPI details missing' : ''}
+          </p>
         )}
 
         {data?.summary && (

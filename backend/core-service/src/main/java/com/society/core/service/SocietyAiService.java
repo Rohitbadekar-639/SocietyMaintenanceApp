@@ -2,18 +2,16 @@ package com.society.core.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.society.core.domain.MaintenanceStatus;
 import com.society.core.dto.SocietyAiDtos.*;
 import com.society.core.exception.ApiExceptions.BadRequestException;
 import com.society.core.repository.ComplaintRepository;
-import com.society.core.repository.MaintenanceChargeRepository;
 import com.society.core.repository.NoticeRepository;
 import com.society.core.repository.PaymentClaimRepository;
 import com.society.core.repository.SocietyBankAccountRepository;
+import com.society.core.service.MaintenanceOutstandingService.OutstandingSnapshot;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -30,7 +28,7 @@ public class SocietyAiService {
     };
 
     private final AssistantService assistantService;
-    private final MaintenanceChargeRepository chargeRepository;
+    private final MaintenanceOutstandingService outstandingService;
     private final PaymentClaimRepository claimRepository;
     private final ComplaintRepository complaintRepository;
     private final NoticeRepository noticeRepository;
@@ -39,14 +37,14 @@ public class SocietyAiService {
 
     public SocietyAiService(
             AssistantService assistantService,
-            MaintenanceChargeRepository chargeRepository,
+            MaintenanceOutstandingService outstandingService,
             PaymentClaimRepository claimRepository,
             ComplaintRepository complaintRepository,
             NoticeRepository noticeRepository,
             SocietyBankAccountRepository bankAccountRepository,
             ObjectMapper objectMapper) {
         this.assistantService = assistantService;
-        this.chargeRepository = chargeRepository;
+        this.outstandingService = outstandingService;
         this.claimRepository = claimRepository;
         this.complaintRepository = complaintRepository;
         this.noticeRepository = noticeRepository;
@@ -148,14 +146,15 @@ public class SocietyAiService {
 
     public AttentionDigestResponse attentionDigest(UUID societyId, String societyName, AttentionDigestRequest req) {
         String language = normalizeLanguage(req.language());
-        LocalDate today = LocalDate.now();
-        int year = today.getYear();
-        int month = today.getMonthValue();
+        OutstandingSnapshot dues = outstandingService.snapshot(societyId);
+        int year = dues.billingYear();
+        int month = dues.billingMonth();
 
-        long pendingDuesCount = chargeRepository.countBySocietyIdAndStatusAndBillingYearAndBillingMonth(
-                societyId, MaintenanceStatus.PENDING, year, month);
-        BigDecimal pendingDuesAmount = chargeRepository.sumByStatusForMonth(
-                societyId, MaintenanceStatus.PENDING, year, month);
+        long pendingDuesCount = dues.pendingCount();
+        BigDecimal pendingDuesAmount = dues.pendingAmount() == null ? BigDecimal.ZERO : dues.pendingAmount();
+        long currentMonthPendingCount = dues.currentMonthPendingCount();
+        BigDecimal currentMonthPendingAmount = dues.currentMonthPendingAmount() == null
+                ? BigDecimal.ZERO : dues.currentMonthPendingAmount();
         long submittedClaims = claimRepository.countBySocietyIdAndStatus(societyId, "SUBMITTED");
         long openComplaints = complaintRepository.countBySocietyIdAndStatus(societyId, "OPEN");
         long unnotifiedNotices = noticeRepository.countBySocietyIdAndNotifiedAtIsNull(societyId);
@@ -165,7 +164,9 @@ public class SocietyAiService {
 
         AttentionStats stats = new AttentionStats(
                 pendingDuesCount,
-                pendingDuesAmount == null ? BigDecimal.ZERO : pendingDuesAmount,
+                pendingDuesAmount,
+                currentMonthPendingCount,
+                currentMonthPendingAmount,
                 submittedClaims,
                 openComplaints,
                 unnotifiedNotices,
@@ -183,11 +184,15 @@ public class SocietyAiService {
                     "claims"));
         }
         if (pendingDuesCount > 0) {
+            String detail = currentMonthPendingCount + " pending in " + MONTHS_EN[month] + " " + year
+                    + " · ₹" + currentMonthPendingAmount.stripTrailingZeros().toPlainString()
+                    + " · total outstanding till date: "
+                    + pendingDuesCount + " · ₹" + pendingDuesAmount.stripTrailingZeros().toPlainString()
+                    + " (includes unrecorded flats, same as Maintenance Tracker)";
             items.add(new AttentionItem(
                     "DUES",
-                    "Pending maintenance (" + MONTHS_EN[month] + " " + year + ")",
-                    pendingDuesCount + " recorded pending · ₹"
-                            + stats.pendingDuesAmount().stripTrailingZeros().toPlainString(),
+                    "Pending maintenance (till date)",
+                    detail,
                     "maintenance"));
         }
         if (openComplaints > 0) {
@@ -226,9 +231,9 @@ public class SocietyAiService {
                 Language code: %s
                 %s
                 Society: %s
-                Today period: %s %d
-                Pending dues count (recorded): %d
-                Pending dues amount: ₹%s
+                Current calendar month: %s %d
+                Pending dues this month (tracker-aligned, includes not-yet-recorded): %d · ₹%s
+                Total pending dues till date (all months up to today, tracker-aligned): %d · ₹%s
                 Submitted payment claims: %d
                 Open complaints: %d
                 Notices not notified: %d
@@ -239,8 +244,10 @@ public class SocietyAiService {
                 languageLabel(language),
                 societyName == null || societyName.isBlank() ? "Your society" : societyName.trim(),
                 MONTHS_EN[month], year,
+                currentMonthPendingCount,
+                currentMonthPendingAmount.stripTrailingZeros().toPlainString(),
                 pendingDuesCount,
-                stats.pendingDuesAmount().stripTrailingZeros().toPlainString(),
+                pendingDuesAmount.stripTrailingZeros().toPlainString(),
                 submittedClaims,
                 openComplaints,
                 unnotifiedNotices,
@@ -250,7 +257,7 @@ public class SocietyAiService {
                         .reduce((a, b) -> a + "; " + b).orElse("none")
         );
 
-        String raw = assistantService.complete(system, user, 0.25, 260).trim();
+        String raw = assistantService.complete(system, user, 0.25, 320).trim();
         JsonNode node = parseJsonObject(raw);
         String summary = textOrEmpty(node, "summary");
         if (summary.isBlank()) {

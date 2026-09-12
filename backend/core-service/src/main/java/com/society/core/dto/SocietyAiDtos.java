@@ -65,6 +65,8 @@ public class SocietyAiDtos {
     public record AttentionStats(
             long pendingDuesCount,
             BigDecimal pendingDuesAmount,
+            long currentMonthPendingCount,
+            BigDecimal currentMonthPendingAmount,
             long submittedClaims,
             long openComplaints,
             long unnotifiedNotices,

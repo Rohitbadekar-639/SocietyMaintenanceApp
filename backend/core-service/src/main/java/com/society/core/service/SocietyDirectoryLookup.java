@@ -14,10 +14,30 @@ import java.util.UUID;
 @Service
 public class SocietyDirectoryLookup {
 
+    public record MemberRef(UUID id, String flatNumber, String fullName, boolean active) {}
+
     private final JdbcTemplate jdbc;
 
     public SocietyDirectoryLookup(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    /** Same population as identity MemberService.listMembers (role MEMBER). */
+    public List<MemberRef> listMembers(UUID societyId) {
+        if (societyId == null) return List.of();
+        return jdbc.query(
+                """
+                SELECT id, flat_number, full_name, active
+                FROM users
+                WHERE society_id = ? AND role = 'MEMBER'
+                ORDER BY active DESC, full_name ASC
+                """,
+                (rs, i) -> new MemberRef(
+                        (UUID) rs.getObject("id"),
+                        rs.getString("flat_number"),
+                        rs.getString("full_name"),
+                        rs.getBoolean("active")),
+                societyId);
     }
 
     public Optional<String> findSocietyName(UUID societyId) {
