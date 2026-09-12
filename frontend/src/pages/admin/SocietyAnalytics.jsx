@@ -14,6 +14,11 @@ import {
 } from '../../api/services'
 import { Alert } from '../../components/ui/Feedback'
 import { getApiErrorMessage } from '../../utils/apiError'
+import {
+  effectiveAmountFor,
+  summarizeMaintenancePeriod,
+  summarizeMaintenanceYear,
+} from '../../utils/maintenancePeriod'
 import { inr, monthName } from '../../utils/share'
 
 const now = new Date()
@@ -37,18 +42,6 @@ function shortInr(value) {
   if (n >= 100000) return `₹ ${(n / 100000).toFixed(n % 100000 === 0 ? 0 : 1)}L`
   if (n >= 1000) return `₹ ${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k`
   return inr(n)
-}
-
-function periodKey(year, month) {
-  return Number(year) * 100 + Number(month)
-}
-
-function effectiveAmountFor(rates, year, month) {
-  const target = periodKey(year, month)
-  const applicable = (rates || [])
-    .filter((r) => periodKey(r.effectiveFromYear, r.effectiveFromMonth) <= target)
-    .sort((a, b) => periodKey(b.effectiveFromYear, b.effectiveFromMonth) - periodKey(a.effectiveFromYear, a.effectiveFromMonth))
-  return applicable[0] || null
 }
 
 function barPx(value, max, chartH = CHART_H) {
@@ -121,64 +114,44 @@ export default function SocietyAnalytics() {
     const periodRate = effectiveAmountFor(rates, year, month)
     const rateAmount = periodRate ? Number(periodRate.amount) : 0
 
-    const activeMembers = members.filter((mem) => mem.active !== false && String(mem.role || '').toUpperCase() !== 'ADMIN')
-    // Prefer unique flats when available; otherwise member count.
-    const flatSet = new Set(
-      activeMembers.map((mem) => String(mem.flatNumber || '').trim().toLowerCase()).filter(Boolean),
-    )
-    const billedUnits = flatSet.size || activeMembers.length
+    // Same member set / pending rules as Maintenance Tracker (includes "Not recorded yet").
+    const monthDues = summarizeMaintenancePeriod({
+      members,
+      charges,
+      rates,
+      memberDefaults,
+      billingMode,
+      year,
+      month,
+    })
+    const yearDues = summarizeMaintenanceYear({
+      members,
+      charges,
+      rates,
+      memberDefaults,
+      billingMode,
+      year,
+    })
 
-    let expectedFromRate = 0
-    if (billingMode === 'VARIABLE') {
-      expectedFromRate = activeMembers.reduce((sum, mem) => {
-        const target = periodKey(year, month)
-        const applicable = (memberDefaults || [])
-          .filter((d) => {
-            const matchesMember = d.memberId === mem.id
-            const matchesFlat = String(d.flatNumber || '').trim().toLowerCase()
-              === String(mem.flatNumber || '').trim().toLowerCase()
-            if (!matchesMember && !matchesFlat) return false
-            return periodKey(d.effectiveFromYear, d.effectiveFromMonth) <= target
-          })
-          .sort(
-            (a, b) =>
-              periodKey(b.effectiveFromYear, b.effectiveFromMonth)
-              - periodKey(a.effectiveFromYear, a.effectiveFromMonth),
-          )
-        const amt = applicable[0] ? Number(applicable[0].amount) : 0
-        return sum + (amt > 0 ? amt : 0)
-      }, 0)
-    } else {
-      expectedFromRate = rateAmount > 0 && billedUnits > 0 ? rateAmount * billedUnits : 0
-    }
-
-    const monthCharges = charges.filter(
-      (c) => Number(c.billingYear) === year && Number(c.billingMonth) === month,
-    )
-    const yearCharges = charges.filter((c) => Number(c.billingYear) === year)
-
-    const paidFlatsMonth = monthCharges.filter((c) => String(c.status).toUpperCase() === 'PAID').length
-    const pendingFlatsMonth = monthCharges.filter((c) => String(c.status).toUpperCase() === 'PENDING').length
-    const recordedMonth = paidFlatsMonth + pendingFlatsMonth
-
-    const collectedAmt = Number(monthly?.maintenanceCollected || 0)
-    const pendingAmt = Number(monthly?.maintenancePending || 0)
-    const expenseAmt = Number(monthly?.totalExpenses || 0)
-
-    // Prefer recorded dues; fall back to scheduled rate × units when admin set a default amount.
-    const expectedCollection = recordedMonth > 0
-      ? collectedAmt + pendingAmt
-      : expectedFromRate
+    const billedUnits = monthDues.totalMembers
+    const expectedFromRate = monthDues.expectedCollection
+    const collectedAmt = monthDues.collectedAmt
+    const pendingAmt = monthDues.pendingAmt
+    const expectedCollection = monthDues.expectedCollection
+    const paidFlatsMonth = monthDues.paidFlats
+    const pendingFlatsMonth = monthDues.pendingFlats
     const collectedPct = expectedCollection > 0
       ? Math.min(100, Math.round((collectedAmt / expectedCollection) * 100))
-      : (recordedMonth ? Math.round((paidFlatsMonth / recordedMonth) * 100) : 0)
+      : 0
 
-    const yearCollected = Number(annual?.totalIncome || 0)
+    const expenseAmt = Number(monthly?.totalExpenses || 0)
     const yearExpenses = Number(annual?.totalExpenses || 0)
-    const yearPending = Number(annual?.pendingDues || 0)
-    const yearPaidFlats = yearCharges.filter((c) => String(c.status).toUpperCase() === 'PAID').length
-    const yearPendingFlats = yearCharges.filter((c) => String(c.status).toUpperCase() === 'PENDING').length
-    const yearExpected = yearCollected + yearPending
+    // Yearly income/pending from tracker-aligned month rollups (not charge-only report totals).
+    const yearCollected = yearDues.collectedAmt
+    const yearPending = yearDues.pendingAmt
+    const yearPaidFlats = yearDues.paidFlats
+    const yearPendingFlats = yearDues.pendingFlats
+    const yearExpected = yearDues.expectedCollection
     const yearCollectedPct = yearExpected > 0
       ? Math.min(100, Math.round((yearCollected / yearExpected) * 100))
       : 0
@@ -187,20 +160,15 @@ export default function SocietyAnalytics() {
       ? yearCollected >= yearExpenses
       : collectedAmt >= expenseAmt
 
-    const byMonth = new Map(
-      (annual?.monthlyLines || []).map((line) => [
-        Number(line.month),
-        {
-          month: Number(line.month),
-          income: Number(line.income || 0),
-          expenses: Number(line.expenses || 0),
-          net: Number(line.net || 0),
-        },
-      ]),
+    // Income bars: tracker-aligned collected per month; expenses still from annual report lines.
+    const expenseByMonth = new Map(
+      (annual?.monthlyLines || []).map((line) => [Number(line.month), Number(line.expenses || 0)]),
     )
     const monthBars = Array.from({ length: 12 }, (_, i) => {
       const m = i + 1
-      return byMonth.get(m) || { month: m, income: 0, expenses: 0, net: 0 }
+      const income = yearDues.monthly[i]?.collectedAmt || 0
+      const expenses = expenseByMonth.get(m) || 0
+      return { month: m, income, expenses, net: income - expenses }
     })
     const maxBar = Math.max(1, ...monthBars.map((b) => Math.max(b.income, b.expenses)))
 
@@ -308,7 +276,7 @@ export default function SocietyAnalytics() {
           </p>
           <h1 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl md:text-3xl">Analytics</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Live, period-based overview synced with maintenance, expenses, claims and complaints.
+            Live overview synced with Maintenance Tracker (including dues not yet recorded), expenses, claims and complaints.
           </p>
         </div>
         <button type="button" className="btn-secondary w-full shrink-0 sm:w-auto" onClick={load} disabled={loading}>
@@ -563,7 +531,15 @@ export default function SocietyAnalytics() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Pending dues" value={loading ? '—' : inr(stats.pendingAmt)} hint={`${stats.pendingFlats} flats awaiting payment`} />
+        <StatCard
+          label="Pending dues"
+          value={loading ? '—' : inr(stats.pendingAmt)}
+          hint={
+            view === 'yearly'
+              ? `${stats.pendingFlats} member-month(s) awaiting payment`
+              : `${stats.pendingFlats} flat${stats.pendingFlats === 1 ? '' : 's'} awaiting payment`
+          }
+        />
         <StatCard label="Expenses" value={loading ? '—' : inr(stats.expenseAmt)} hint={periodLabel} />
         <StatCard label="Payment claims" value={loading ? '—' : String(stats.pendingClaims)} hint="Waiting for review in period" />
         <StatCard label="Open complaints" value={loading ? '—' : String(stats.openComplaints)} hint={`${stats.resolvedComplaints} resolved / closed`} />

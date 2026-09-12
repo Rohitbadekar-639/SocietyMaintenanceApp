@@ -10,6 +10,12 @@ import DuesWhatsAppDraftButton from '../../components/DuesWhatsAppDraftButton'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { getApiErrorMessage } from '../../utils/apiError'
+import {
+  buildPeriodRows,
+  effectiveAmountFor,
+  effectiveMemberAmount,
+  normalizeFlat,
+} from '../../utils/maintenancePeriod'
 import { inr, monthName } from '../../utils/share'
 
 const now = new Date()
@@ -30,45 +36,8 @@ function formatPaymentMode(mode) {
   return mode
 }
 
-function normalizeFlat(value) {
-  return String(value || '').trim().toLowerCase()
-}
-
-function periodKey(year, month) {
-  return Number(year) * 100 + Number(month)
-}
-
-/** Latest rate whose effective-from is on or before the target period. */
-function effectiveAmountFor(rates, year, month) {
-  const target = periodKey(year, month)
-  const applicable = rates
-    .filter((r) => periodKey(r.effectiveFromYear, r.effectiveFromMonth) <= target)
-    .sort((a, b) => periodKey(b.effectiveFromYear, b.effectiveFromMonth) - periodKey(a.effectiveFromYear, a.effectiveFromMonth))
-  return applicable[0] || null
-}
-
 function memberLabel(m) {
   return `${m.fullName} · Flat ${m.flatNumber}${m.mobile ? ` · ${m.mobile}` : ''}`
-}
-
-function effectiveMemberAmount(defaults, member, year, month) {
-  const target = periodKey(year, month)
-  const memberId = member?.id
-  const flatKey = normalizeFlat(member?.flatNumber)
-  const applicable = (defaults || [])
-    .filter((d) => {
-      const matchesMember = memberId && d.memberId === memberId
-      const matchesFlat = flatKey && normalizeFlat(d.flatNumber) === flatKey
-      if (!matchesMember && !matchesFlat) return false
-      return periodKey(d.effectiveFromYear, d.effectiveFromMonth) <= target
-    })
-    .sort(
-      (a, b) =>
-        periodKey(b.effectiveFromYear, b.effectiveFromMonth)
-        - periodKey(a.effectiveFromYear, a.effectiveFromMonth),
-    )
-  const hit = applicable[0]
-  return hit && Number(hit.amount) > 0 ? Number(hit.amount) : 0
 }
 
 export default function MaintenanceTracker() {
@@ -252,55 +221,29 @@ export default function MaintenanceTracker() {
   )
 
   const periodRows = useMemo(() => {
-    const year = Number(trackerYear)
-    const month = Number(trackerMonth)
-    const scheduledAmount = periodRate ? Number(periodRate.amount) : 0
-    return members
-      .slice()
-      .sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber)) || a.fullName.localeCompare(b.fullName))
-      .map((member) => {
-        const charge = charges.find(
-          (c) =>
-            Number(c.billingYear) === year
-            && Number(c.billingMonth) === month
-            && (
-              (c.memberId && c.memberId === member.id)
-              || normalizeFlat(c.flatNumber) === normalizeFlat(member.flatNumber)
-            ),
-        )
-
-        const defaultAmount = isVariable
-          ? effectiveMemberAmount(memberDefaults, member, year, month)
-          : scheduledAmount
-
-        return {
-          key: member.id,
-          memberId: member.id,
-          memberName: member.fullName,
-          memberMobile: member.mobile || '',
-          memberEmail: member.email || '',
-          flatNumber: member.flatNumber,
-          billingYear: year,
-          billingMonth: month,
-          chargeId: charge?.id || null,
-          amount: charge ? Number(charge.amount) : defaultAmount,
-          status: charge?.status || 'PENDING',
-          paymentMode: charge?.paymentMode || null,
-          notes: charge?.notes || '',
-          isVirtual: !charge,
-          usesSchedule: !charge,
-          hasDefault: charge ? true : defaultAmount > 0,
-        }
-      })
-  }, [
-    members,
-    charges,
-    trackerYear,
-    trackerMonth,
-    periodRate,
-    isVariable,
-    memberDefaults,
-  ])
+    const base = buildPeriodRows({
+      members,
+      charges,
+      rates,
+      memberDefaults,
+      billingMode: billingSettings.billingMode || 'SAME',
+      year: trackerYear,
+      month: trackerMonth,
+    })
+    return base.map((row) => {
+      const member = members.find((m) => m.id === row.memberId)
+      const charge = charges.find((c) => c.id === row.chargeId)
+      return {
+        ...row,
+        memberMobile: member?.mobile || '',
+        memberEmail: member?.email || '',
+        paymentMode: charge?.paymentMode || null,
+        notes: charge?.notes || '',
+        usesSchedule: row.isVirtual,
+        hasDefault: !row.isVirtual || Number(row.amount) > 0,
+      }
+    })
+  }, [members, charges, rates, memberDefaults, billingSettings.billingMode, trackerYear, trackerMonth])
 
   const periodStats = useMemo(() => {
     const paid = periodRows.filter((r) => r.status === 'PAID').length
