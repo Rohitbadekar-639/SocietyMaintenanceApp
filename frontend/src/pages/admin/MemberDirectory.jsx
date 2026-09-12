@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { MemberService } from '../../api/services'
+import { MaintenanceService, MemberService } from '../../api/services'
 import { Alert, SectionTitle, StatusBadge } from '../../components/ui/Feedback'
 import { useToast } from '../../context/ToastContext'
 import { getApiErrorMessage } from '../../utils/apiError'
+import { inr, monthName } from '../../utils/share'
 import {
   collectErrors,
   email,
@@ -14,6 +15,21 @@ import {
 } from '../../utils/validation'
 
 const emptyForm = { fullName: '', flatNumber: '', mobile: '', email: '' }
+
+function formatOutstandingMessage(outstanding) {
+  const periods = Array.isArray(outstanding?.periods) ? outstanding.periods : []
+  const lines = periods
+    .slice(0, 8)
+    .map((p) => `${monthName(p.billingMonth)} ${p.billingYear}: ${inr(p.amount)}${p.recorded ? '' : ' (not recorded yet)'}`)
+  const more = periods.length > 8 ? `\n…and ${periods.length - 8} more period(s)` : ''
+  return (
+    `Payment left for ${outstanding.memberName || 'this member'} (Flat ${outstanding.flatNumber || '—'}):\n`
+    + `${outstanding.pendingCount} period(s) · total ${inr(outstanding.pendingAmount)}\n\n`
+    + lines.join('\n')
+    + more
+    + '\n\nMark these dues paid in Maintenance Tracker before making the member inactive.'
+  )
+}
 
 export default function MemberDirectory() {
   const toast = useToast()
@@ -109,16 +125,25 @@ export default function MemberDirectory() {
   }
 
   async function handleDelete(member) {
-    if (!window.confirm(`Delete ${member.fullName} from the active directory? They will not be able to sign in. Records are kept for history.`)) {
-      return
-    }
     setRowBusy(member.id)
     try {
+      const outstanding = await MaintenanceService.memberOutstanding(member.id)
+      if (!outstanding?.clearToDeactivate && Number(outstanding?.pendingCount || 0) > 0) {
+        window.alert(formatOutstandingMessage(outstanding))
+        return
+      }
+      if (!window.confirm(
+        `Make ${member.fullName} inactive?\n\n`
+        + 'They will not appear in Maintenance Tracker, Analytics, or Committee Digest, '
+        + 'and will not be billed for future months. Past paid records stay in history.',
+      )) {
+        return
+      }
       await MemberService.deactivate(member.id)
-      toast.info(`${member.fullName} removed from active members.`)
+      toast.info(`${member.fullName} is now inactive.`)
       await load()
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Could not delete member.'))
+      toast.error(getApiErrorMessage(err, 'Could not make member inactive.'))
     } finally {
       setRowBusy('')
     }
@@ -233,7 +258,7 @@ export default function MemberDirectory() {
                             disabled={rowBusy === m.id}
                             onClick={() => handleDelete(m)}
                           >
-                            Delete
+                            Make inactive
                           </button>
                         )}
                       </div>

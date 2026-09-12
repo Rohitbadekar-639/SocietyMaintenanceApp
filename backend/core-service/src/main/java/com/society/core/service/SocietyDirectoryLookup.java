@@ -22,15 +22,15 @@ public class SocietyDirectoryLookup {
         this.jdbc = jdbc;
     }
 
-    /** Same population as identity MemberService.listMembers (role MEMBER). */
+    /** Active residents only — inactive members are excluded from tracker/digest math. */
     public List<MemberRef> listMembers(UUID societyId) {
         if (societyId == null) return List.of();
         return jdbc.query(
                 """
                 SELECT id, flat_number, full_name, active
                 FROM users
-                WHERE society_id = ? AND role = 'MEMBER'
-                ORDER BY active DESC, full_name ASC
+                WHERE society_id = ? AND role = 'MEMBER' AND active = TRUE
+                ORDER BY full_name ASC
                 """,
                 (rs, i) -> new MemberRef(
                         (UUID) rs.getObject("id"),
@@ -38,6 +38,25 @@ public class SocietyDirectoryLookup {
                         rs.getString("full_name"),
                         rs.getBoolean("active")),
                 societyId);
+    }
+
+    public Optional<MemberRef> findMember(UUID societyId, UUID memberId) {
+        if (societyId == null || memberId == null) return Optional.empty();
+        List<MemberRef> rows = jdbc.query(
+                """
+                SELECT id, flat_number, full_name, active
+                FROM users
+                WHERE society_id = ? AND id = ? AND role = 'MEMBER'
+                LIMIT 1
+                """,
+                (rs, i) -> new MemberRef(
+                        (UUID) rs.getObject("id"),
+                        rs.getString("flat_number"),
+                        rs.getString("full_name"),
+                        rs.getBoolean("active")),
+                societyId,
+                memberId);
+        return rows.stream().findFirst();
     }
 
     public Optional<String> findSocietyName(UUID societyId) {

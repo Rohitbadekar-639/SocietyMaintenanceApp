@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -34,6 +35,18 @@ public class MaintenanceOutstandingService {
             BigDecimal currentMonthPendingAmount,
             int billingMonth,
             int billingYear
+    ) {}
+
+    public record MemberPeriodDue(int billingYear, int billingMonth, BigDecimal amount, boolean recorded) {}
+
+    public record MemberOutstanding(
+            UUID memberId,
+            String memberName,
+            String flatNumber,
+            long pendingCount,
+            BigDecimal pendingAmount,
+            boolean clearToDeactivate,
+            List<MemberPeriodDue> periods
     ) {}
 
     private final MaintenanceChargeRepository chargeRepository;
@@ -62,17 +75,10 @@ public class MaintenanceOutstandingService {
         int endMonth = today.getMonthValue();
 
         List<SocietyDirectoryLookup.MemberRef> members = directoryLookup.listMembers(societyId);
-        List<MaintenanceCharge> charges = chargeRepository
-                .findBySocietyIdOrderByBillingYearDescBillingMonthDesc(societyId);
+        Map<String, MaintenanceCharge> byKey = indexCharges(societyId);
+        LocalDate start = earliestPeriod(societyId, chargeRepository
+                .findBySocietyIdOrderByBillingYearDescBillingMonthDesc(societyId), today);
 
-        Map<String, MaintenanceCharge> byKey = new HashMap<>();
-        for (MaintenanceCharge c : charges) {
-            byKey.put(chargeKey(c.getMemberId(), c.getFlatNumber(), c.getBillingYear(), c.getBillingMonth()), c);
-            // Flat-only fallback key when memberId missing on older rows
-            byKey.putIfAbsent(flatKey(c.getFlatNumber(), c.getBillingYear(), c.getBillingMonth()), c);
-        }
-
-        LocalDate start = earliestPeriod(societyId, charges, today);
         long pendingCount = 0;
         BigDecimal pendingAmount = BigDecimal.ZERO;
         long currentMonthCount = 0;
@@ -84,36 +90,15 @@ public class MaintenanceOutstandingService {
             boolean isCurrent = year == endYear && month == endMonth;
 
             for (SocietyDirectoryLookup.MemberRef member : members) {
-                MaintenanceCharge charge = findCharge(byKey, member, year, month);
-                BigDecimal dueAmount;
-                boolean unpaid;
-
-                if (charge != null) {
-                    if (charge.getStatus() == MaintenanceStatus.PAID) {
-                        continue;
-                    }
-                    unpaid = true;
-                    dueAmount = charge.getAmount() != null ? charge.getAmount() : BigDecimal.ZERO;
-                } else {
-                    ResolvedAmountResponse resolved = billingService.resolveAmount(
-                            societyId, member.id(), member.flatNumber(), year, month);
-                    if (!resolved.configured() || resolved.amount() == null
-                            || resolved.amount().compareTo(BigDecimal.ZERO) <= 0) {
-                        continue;
-                    }
-                    unpaid = true;
-                    dueAmount = resolved.amount();
-                }
-
-                if (!unpaid || dueAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                BigDecimal due = unpaidAmount(societyId, byKey, member, year, month);
+                if (due == null) {
                     continue;
                 }
-
                 pendingCount++;
-                pendingAmount = pendingAmount.add(dueAmount);
+                pendingAmount = pendingAmount.add(due);
                 if (isCurrent) {
                     currentMonthCount++;
-                    currentMonthAmount = currentMonthAmount.add(dueAmount);
+                    currentMonthAmount = currentMonthAmount.add(due);
                 }
             }
         }
@@ -126,6 +111,81 @@ public class MaintenanceOutstandingService {
                 endMonth,
                 endYear
         );
+    }
+
+    /**
+     * Tracker-aligned outstanding for one member (used before deactivate / delete).
+     */
+    @Transactional(readOnly = true)
+    public MemberOutstanding forMember(UUID societyId, UUID memberId) {
+        SocietyDirectoryLookup.MemberRef member = directoryLookup.findMember(societyId, memberId)
+                .orElseThrow(() -> new com.society.core.exception.ApiExceptions.NotFoundException(
+                        "Member not found in this society."));
+
+        Map<String, MaintenanceCharge> byKey = indexCharges(societyId);
+        List<MaintenanceCharge> charges = chargeRepository
+                .findBySocietyIdOrderByBillingYearDescBillingMonthDesc(societyId);
+        LocalDate today = LocalDate.now();
+        LocalDate start = earliestPeriod(societyId, charges, today);
+
+        List<MemberPeriodDue> periods = new ArrayList<>();
+        BigDecimal pendingAmount = BigDecimal.ZERO;
+
+        for (LocalDate cursor = start; !cursor.isAfter(today); cursor = cursor.plusMonths(1)) {
+            int year = cursor.getYear();
+            int month = cursor.getMonthValue();
+            MaintenanceCharge charge = findCharge(byKey, member, year, month);
+            BigDecimal due = unpaidAmount(societyId, byKey, member, year, month);
+            if (due == null) {
+                continue;
+            }
+            periods.add(new MemberPeriodDue(year, month, due, charge != null));
+            pendingAmount = pendingAmount.add(due);
+        }
+
+        return new MemberOutstanding(
+                member.id(),
+                member.fullName(),
+                member.flatNumber(),
+                periods.size(),
+                pendingAmount,
+                periods.isEmpty(),
+                periods
+        );
+    }
+
+    private Map<String, MaintenanceCharge> indexCharges(UUID societyId) {
+        List<MaintenanceCharge> charges = chargeRepository
+                .findBySocietyIdOrderByBillingYearDescBillingMonthDesc(societyId);
+        Map<String, MaintenanceCharge> byKey = new HashMap<>();
+        for (MaintenanceCharge c : charges) {
+            byKey.put(chargeKey(c.getMemberId(), c.getFlatNumber(), c.getBillingYear(), c.getBillingMonth()), c);
+            byKey.putIfAbsent(flatKey(c.getFlatNumber(), c.getBillingYear(), c.getBillingMonth()), c);
+        }
+        return byKey;
+    }
+
+    /** @return unpaid amount, or null if nothing due for that period */
+    private BigDecimal unpaidAmount(
+            UUID societyId,
+            Map<String, MaintenanceCharge> byKey,
+            SocietyDirectoryLookup.MemberRef member,
+            int year,
+            int month) {
+        MaintenanceCharge charge = findCharge(byKey, member, year, month);
+        if (charge != null) {
+            if (charge.getStatus() == MaintenanceStatus.PAID) {
+                return null;
+            }
+            return charge.getAmount() != null ? charge.getAmount() : BigDecimal.ZERO;
+        }
+        ResolvedAmountResponse resolved = billingService.resolveAmount(
+                societyId, member.id(), member.flatNumber(), year, month);
+        if (!resolved.configured() || resolved.amount() == null
+                || resolved.amount().compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return resolved.amount();
     }
 
     private LocalDate earliestPeriod(UUID societyId, List<MaintenanceCharge> charges, LocalDate today) {

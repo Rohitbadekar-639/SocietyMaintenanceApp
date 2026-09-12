@@ -26,6 +26,8 @@ export const MaintenanceService = {
   markPending: (payload) => coreApi.post('/maintenance/pending', payload).then((r) => r.data),
   markPaid: (chargeId, paymentMode) =>
     coreApi.patch(`/maintenance/${chargeId}/paid`, null, { params: { paymentMode } }).then((r) => r.data),
+  memberOutstanding: (memberId) =>
+    coreApi.get(`/maintenance/members/${memberId}/outstanding`).then((r) => r.data),
   downloadReceipt: (chargeId) =>
     coreApi.get(`/maintenance/${chargeId}/receipt`, { responseType: 'blob' }).then((r) => r.data),
 }

@@ -1,6 +1,7 @@
 /**
  * Shared maintenance period math — keep Analytics and Maintenance Tracker in sync.
- * Pending includes members with no charge row yet ("Not recorded yet"), same as the tracker UI.
+ * Pass **active** members only. Pending includes flats with no charge row yet
+ * ("Not recorded yet"), same as the tracker UI. Inactive members are excluded by callers.
  */
 
 export function normalizeFlat(value) {

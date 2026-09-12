@@ -18,10 +18,15 @@ public class MemberService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final MemberExitDuesGuard exitDuesGuard;
 
-    public MemberService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public MemberService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            MemberExitDuesGuard exitDuesGuard) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.exitDuesGuard = exitDuesGuard;
     }
 
     @Transactional
@@ -90,6 +95,10 @@ public class MemberService {
     @Transactional
     public void deactivateMember(UUID societyId, UUID memberId) {
         User member = requireMember(societyId, memberId);
+        if (!member.isActive()) {
+            return;
+        }
+        exitDuesGuard.assertClearToDeactivate(member);
         member.setActive(false);
         userRepository.save(member);
     }

@@ -2,6 +2,7 @@ package com.society.core.web;
 
 import com.society.core.dto.MaintenanceDtos.*;
 import com.society.core.security.AuthenticatedUser;
+import com.society.core.service.MaintenanceOutstandingService;
 import com.society.core.service.MaintenanceService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -20,15 +21,28 @@ import java.util.UUID;
 public class MaintenanceController {
 
     private final MaintenanceService service;
+    private final MaintenanceOutstandingService outstandingService;
 
-    public MaintenanceController(MaintenanceService service) {
+    public MaintenanceController(
+            MaintenanceService service,
+            MaintenanceOutstandingService outstandingService) {
         this.service = service;
+        this.outstandingService = outstandingService;
     }
 
     @GetMapping
     public ResponseEntity<List<MaintenanceChargeResponse>> list(
             @AuthenticationPrincipal AuthenticatedUser user) {
         return ResponseEntity.ok(service.list(user.societyId()));
+    }
+
+    /** Outstanding dues for one member (tracker-aligned). Used before deactivate. */
+    @GetMapping("/members/{memberId}/outstanding")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<MaintenanceOutstandingService.MemberOutstanding> memberOutstanding(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID memberId) {
+        return ResponseEntity.ok(outstandingService.forMember(user.societyId(), memberId));
     }
 
     @GetMapping("/{chargeId}/receipt")

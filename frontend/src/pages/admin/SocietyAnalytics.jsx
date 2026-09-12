@@ -114,9 +114,10 @@ export default function SocietyAnalytics() {
     const periodRate = effectiveAmountFor(rates, year, month)
     const rateAmount = periodRate ? Number(periodRate.amount) : 0
 
-    // Same member set / pending rules as Maintenance Tracker (includes "Not recorded yet").
+    // Same member set / pending rules as Maintenance Tracker (active members only; includes "Not recorded yet").
+    const activeMembers = (members || []).filter((mem) => mem.active !== false)
     const monthDues = summarizeMaintenancePeriod({
-      members,
+      members: activeMembers,
       charges,
       rates,
       memberDefaults,
@@ -125,7 +126,7 @@ export default function SocietyAnalytics() {
       month,
     })
     const yearDues = summarizeMaintenanceYear({
-      members,
+      members: activeMembers,
       charges,
       rates,
       memberDefaults,
