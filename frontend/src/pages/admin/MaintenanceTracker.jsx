@@ -816,30 +816,30 @@ export default function MaintenanceTracker() {
 
       {!needsModeChoice && (
       <div className="min-w-0 max-w-full space-y-6">
-      <div className="grid min-w-0 max-w-full grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1">
-          <div className="card">
+      <div className="grid min-w-0 max-w-full grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-1">
+          <div className="card min-w-0">
             <SectionTitle title="Record Maintenance" subtitle="Pick a member, then mark paid or pending" />
             <Alert type="error">{error}</Alert>
             <form className="mt-3 space-y-3" onSubmit={(e) => e.preventDefault()}>
-              <div>
+              <div className="min-w-0">
                 <label className="label">Member</label>
-                <select name="memberId" className="input" value={form.memberId} onChange={update}>
+                <select name="memberId" className="input max-w-full" value={form.memberId} onChange={update}>
                   <option value="">Select member</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>{memberLabel(m)}</option>
                   ))}
                 </select>
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="label">Flat Number</label>
                 <input name="flatNumber" className="input" value={form.flatNumber} onChange={update} required placeholder="Auto-filled from member" />
               </div>
               {form.memberId && membersById[form.memberId] && (
                 <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  <p className="font-semibold text-slate-900">{membersById[form.memberId].fullName}</p>
-                  <p>{membersById[form.memberId].mobile || 'No mobile'}</p>
-                  <p>{membersById[form.memberId].email || 'No email'}</p>
+                  <p className="break-words font-semibold text-slate-900">{membersById[form.memberId].fullName}</p>
+                  <p className="break-words">{membersById[form.memberId].mobile || 'No mobile'}</p>
+                  <p className="break-words">{membersById[form.memberId].email || 'No email'}</p>
                 </div>
               )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -885,14 +885,14 @@ export default function MaintenanceTracker() {
           </div>
         </div>
         <div className="min-w-0 lg:col-span-2">
-          <div className="card">
+          <div className="card min-w-0 overflow-hidden">
             <SectionTitle
               title="Pending dues by member"
               subtitle="Unpaid months only — click a card to filter the tracker"
               action={
-                <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <input
-                    className="input w-full sm:w-44"
+                    className="input min-w-0 w-full sm:max-w-[11rem]"
                     placeholder="Search name / flat"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -904,29 +904,41 @@ export default function MaintenanceTracker() {
                 </div>
               }
             />
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {byMember.map((row) => (
                 <button
                   key={`${row.flatNumber}-${row.memberName}`}
                   type="button"
                   onClick={() => setFlatFilter(row.flatNumber)}
-                  className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                  className={`min-w-0 rounded-xl border px-3 py-2.5 text-left transition ${
                     flatFilter === row.flatNumber ? 'border-orange-300 bg-orange-50/50' : 'border-slate-100 hover:border-orange-200'
                   }`}
                 >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="min-w-0 truncate text-sm font-bold text-slate-950">{row.memberName}</p>
-                    <p className="shrink-0 text-sm font-extrabold text-amber-800">₹{row.totalDue.toLocaleString('en-IN')}</p>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <p className="min-w-0 flex-1 break-words text-sm font-bold leading-snug text-slate-950">
+                        {row.memberName}
+                      </p>
+                      <p className="shrink-0 pt-0.5 text-sm font-extrabold tabular-nums text-amber-800">
+                        ₹{row.totalDue.toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                    <p className="break-words text-xs text-slate-500">
+                      Flat {row.flatNumber}
+                      {row.memberMobile ? ` · ${row.memberMobile}` : ''}
+                      {row.periods.length > 1 ? ` · ${row.periods.length} months` : ''}
+                    </p>
                   </div>
-                  <p className="mt-0.5 truncate text-xs text-slate-500">
-                    Flat {row.flatNumber}
-                    {row.periods.length > 1 ? ` · ${row.periods.length} months` : ''}
-                  </p>
-                  <p className="mt-1.5 text-xs leading-5 text-amber-900/90">
-                    {row.periods
-                      .map((p) => `${monthName(p.month).slice(0, 3)} ${p.year} ₹${Number(p.amount).toLocaleString('en-IN')}`)
-                      .join(' · ')}
-                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {row.periods.map((p) => (
+                      <span
+                        key={`${p.year}-${p.month}`}
+                        className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold leading-4 text-amber-900"
+                      >
+                        {monthName(p.month).slice(0, 3)} {p.year} · ₹{Number(p.amount).toLocaleString('en-IN')}
+                      </span>
+                    ))}
+                  </div>
                 </button>
               ))}
               {byMember.length === 0 && (
