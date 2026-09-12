@@ -194,27 +194,6 @@ export default function MaintenanceTracker() {
     [charges],
   )
 
-  const byMember = useMemo(() => {
-    const map = {}
-    for (const c of filtered) {
-      const key = normalizeFlat(c.flatNumber) || c.id
-      if (!map[key]) {
-        map[key] = {
-          flatNumber: c.flatNumber,
-          memberName: c.memberName,
-          memberMobile: c.memberMobile,
-          pending: 0,
-          paid: 0,
-          count: 0,
-        }
-      }
-      map[key].count += 1
-      if (c.status === 'PENDING') map[key].pending += Number(c.amount)
-      else map[key].paid += Number(c.amount)
-    }
-    return Object.values(map).sort((a, b) => a.memberName.localeCompare(b.memberName))
-  }, [filtered])
-
   const periodRate = useMemo(
     () => effectiveAmountFor(rates, trackerYear, trackerMonth),
     [rates, trackerYear, trackerMonth],
@@ -244,6 +223,89 @@ export default function MaintenanceTracker() {
       }
     })
   }, [members, charges, rates, memberDefaults, billingSettings.billingMode, trackerYear, trackerMonth])
+
+  const byMember = useMemo(() => {
+    const map = {}
+
+    function ensureEntry(key, { flatNumber, memberName, memberMobile }) {
+      if (!map[key]) {
+        map[key] = {
+          flatNumber,
+          memberName,
+          memberMobile: memberMobile || '',
+          periods: [],
+        }
+      }
+      return map[key]
+    }
+
+    function periodExists(entry, year, month) {
+      return entry.periods.some(
+        (p) => Number(p.year) === Number(year) && Number(p.month) === Number(month),
+      )
+    }
+
+    for (const c of filtered) {
+      const key = (c.memberId && String(c.memberId)) || normalizeFlat(c.flatNumber) || c.id
+      const entry = ensureEntry(key, {
+        flatNumber: c.flatNumber,
+        memberName: c.memberName,
+        memberMobile: c.memberMobile,
+      })
+      entry.periods.push({
+        year: Number(c.billingYear),
+        month: Number(c.billingMonth),
+        amount: Number(c.amount || 0),
+        status: String(c.status || 'PENDING').toUpperCase(),
+        paymentMode: c.paymentMode || null,
+        paidAt: c.paidAt || null,
+        isVirtual: false,
+      })
+    }
+
+    // Include current tracker-month "Not recorded yet" rows so summary matches the period table.
+    for (const row of periodRows) {
+      if (!row.isVirtual || String(row.status).toUpperCase() === 'PAID') continue
+      if (flatFilter && normalizeFlat(row.flatNumber) !== normalizeFlat(flatFilter)) continue
+      const q = search.trim().toLowerCase()
+      if (q) {
+        const hay = `${row.memberName} ${row.flatNumber} ${row.memberMobile || ''} ${row.memberEmail || ''}`.toLowerCase()
+        if (!hay.includes(q)) continue
+      }
+      const key = (row.memberId && String(row.memberId)) || normalizeFlat(row.flatNumber) || row.key
+      const entry = ensureEntry(key, {
+        flatNumber: row.flatNumber,
+        memberName: row.memberName,
+        memberMobile: row.memberMobile,
+      })
+      if (periodExists(entry, row.billingYear, row.billingMonth)) continue
+      entry.periods.push({
+        year: Number(row.billingYear),
+        month: Number(row.billingMonth),
+        amount: Number(row.amount || 0),
+        status: 'PENDING',
+        paymentMode: null,
+        paidAt: null,
+        isVirtual: true,
+      })
+    }
+
+    return Object.values(map)
+      .map((entry) => ({
+        ...entry,
+        periods: entry.periods
+          .slice()
+          .sort((a, b) => (b.year * 100 + b.month) - (a.year * 100 + a.month)),
+      }))
+      .sort((a, b) => a.memberName.localeCompare(b.memberName))
+  }, [filtered, periodRows, flatFilter, search])
+
+  function formatPaidWhen(paidAt) {
+    if (!paidAt) return null
+    const d = new Date(paidAt)
+    if (Number.isNaN(d.getTime())) return null
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
 
   const periodStats = useMemo(() => {
     const paid = periodRows.filter((r) => r.status === 'PAID').length
@@ -834,8 +896,8 @@ export default function MaintenanceTracker() {
         <div className="min-w-0 lg:col-span-2">
           <div className="card">
             <SectionTitle
-              title="Member-wise summary"
-              subtitle="Who has paid and who still owes"
+              title="Dues by member & month"
+              subtitle="Which months are paid or pending for each flat"
               action={
                 <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <input
@@ -852,35 +914,65 @@ export default function MaintenanceTracker() {
               }
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              {byMember.map((row) => (
-                <button
-                  key={row.flatNumber}
-                  type="button"
-                  onClick={() => setFlatFilter(row.flatNumber)}
-                  className={`rounded-xl border p-4 text-left transition ${
-                    flatFilter === row.flatNumber ? 'border-orange-300 bg-orange-50/40' : 'border-slate-100 hover:border-orange-200'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-bold text-slate-950">{row.memberName}</p>
-                      <p className="mt-0.5 text-sm text-slate-500">Flat {row.flatNumber}{row.memberMobile ? ` · ${row.memberMobile}` : ''}</p>
+              {byMember.map((row) => {
+                const pendingN = row.periods.filter((p) => p.status !== 'PAID').length
+                const paidN = row.periods.filter((p) => p.status === 'PAID').length
+                return (
+                  <button
+                    key={`${row.flatNumber}-${row.memberName}`}
+                    type="button"
+                    onClick={() => setFlatFilter(row.flatNumber)}
+                    className={`rounded-xl border p-4 text-left transition ${
+                      flatFilter === row.flatNumber ? 'border-orange-300 bg-orange-50/40' : 'border-slate-100 hover:border-orange-200'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-950 break-words">{row.memberName}</p>
+                        <p className="mt-0.5 text-sm text-slate-500">
+                          Flat {row.flatNumber}{row.memberMobile ? ` · ${row.memberMobile}` : ''}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                        {paidN} paid · {pendingN} pending
+                      </span>
                     </div>
-                    <span className="badge bg-slate-100 text-slate-600">{row.count}</span>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <div className="rounded-lg bg-emerald-50 px-2.5 py-2 text-emerald-800">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide">Paid</p>
-                      <p className="font-bold">₹{row.paid.toLocaleString('en-IN')}</p>
-                    </div>
-                    <div className="rounded-lg bg-amber-50 px-2.5 py-2 text-amber-800">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide">Pending</p>
-                      <p className="font-bold">₹{row.pending.toLocaleString('en-IN')}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-              {byMember.length === 0 && <p className="text-sm text-gray-400">No records yet.</p>}
+                    <ul className="mt-3 max-h-40 space-y-1.5 overflow-y-auto">
+                      {row.periods.map((p) => {
+                        const paid = p.status === 'PAID'
+                        const when = formatPaidWhen(p.paidAt)
+                        return (
+                          <li
+                            key={`${p.year}-${p.month}-${p.status}`}
+                            className={`flex items-start justify-between gap-2 rounded-lg px-2.5 py-2 text-sm ${
+                              paid ? 'bg-emerald-50 text-emerald-900' : 'bg-amber-50 text-amber-900'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="font-semibold">
+                                {monthName(p.month)} {p.year}
+                                <span className="ml-1.5 text-[11px] font-bold uppercase tracking-wide opacity-80">
+                                  {paid ? 'Paid' : 'Pending'}
+                                </span>
+                              </p>
+                              <p className="mt-0.5 text-xs opacity-80">
+                                {paid
+                                  ? [
+                                      when ? `on ${when}` : null,
+                                      p.paymentMode ? formatPaymentMode(p.paymentMode) : null,
+                                    ].filter(Boolean).join(' · ') || 'Recorded paid'
+                                  : (p.isVirtual ? 'Not recorded yet' : 'Awaiting payment')}
+                              </p>
+                            </div>
+                            <p className="shrink-0 font-bold">₹{Number(p.amount).toLocaleString('en-IN')}</p>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </button>
+                )
+              })}
+              {byMember.length === 0 && <p className="text-sm text-gray-400">No dues periods to show yet.</p>}
             </div>
           </div>
         </div>
