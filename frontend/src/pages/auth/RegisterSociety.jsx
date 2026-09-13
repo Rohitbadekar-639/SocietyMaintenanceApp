@@ -311,12 +311,12 @@ export default function RegisterSociety() {
           </div>
 
           {quote && (
-            <div className="mt-3">
-              <p className="text-3xl font-extrabold tracking-tight text-slate-950">
+            <div className="mt-3 min-w-0">
+              <p className="break-words text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">
                 {quote.amountDisplay}
                 <span className="text-sm font-semibold text-slate-600"> / year</span>
               </p>
-              <p className="mt-1 text-xs leading-5 text-slate-600">
+              <p className="mt-1 break-words text-xs leading-5 text-slate-600">
                 (this includes ₹{baseFee.toLocaleString('en-IN')} annual maintenance and live support fees)
               </p>
             </div>
@@ -334,25 +334,25 @@ export default function RegisterSociety() {
             <p className="text-sm font-bold text-slate-900">1. Society details</p>
             <p className="mt-1 text-xs leading-5 text-slate-600">Use a unique combination of city and society registration number to create a society code.</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="min-w-0">
               <label className="label">Society Name</label>
-              <input name="societyName" className="input" value={form.societyName} onChange={update} placeholder="e.g. Shree Ganesh Residency" maxLength={150} disabled={busy} />
+              <input name="societyName" className="input max-w-full" value={form.societyName} onChange={update} placeholder="e.g. Shree Ganesh Residency" maxLength={150} disabled={busy} />
               {fieldErrors.societyName && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.societyName}</p>}
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="label">Society Code</label>
-              <input name="societyCode" className="input" value={form.societyCode} onChange={update} placeholder="e.g. SATARA-S312" maxLength={40} disabled={busy} />
+              <input name="societyCode" className="input max-w-full" value={form.societyCode} onChange={update} placeholder="e.g. SATARA-S312" maxLength={40} disabled={busy} />
               {fieldErrors.societyCode && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.societyCode}</p>}
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="label">Address</label>
-              <input name="address" className="input" value={form.address} onChange={update} maxLength={250} disabled={busy} />
+              <input name="address" className="input max-w-full" value={form.address} onChange={update} maxLength={250} disabled={busy} />
               {fieldErrors.address && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.address}</p>}
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="label">City</label>
-              <input name="city" className="input" value={form.city} onChange={update} maxLength={100} disabled={busy} />
+              <input name="city" className="input max-w-full" value={form.city} onChange={update} maxLength={100} disabled={busy} />
               {fieldErrors.city && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.city}</p>}
             </div>
           </div>
@@ -362,26 +362,26 @@ export default function RegisterSociety() {
             <p className="mt-1 text-xs leading-5 text-slate-600">This account will manage members, maintenance, expenses and notices.</p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="min-w-0">
               <label className="label">Full Name</label>
-              <input name="adminName" className="input" value={form.adminName} onChange={update} maxLength={120} disabled={busy} />
+              <input name="adminName" className="input max-w-full" value={form.adminName} onChange={update} maxLength={120} disabled={busy} />
               {fieldErrors.adminName && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.adminName}</p>}
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="label">Mobile</label>
-              <input name="adminMobile" className="input" value={form.adminMobile} onChange={update} inputMode="numeric" placeholder="10-digit mobile" maxLength={10} disabled={busy} />
+              <input name="adminMobile" className="input max-w-full" value={form.adminMobile} onChange={update} inputMode="numeric" placeholder="10-digit mobile" maxLength={10} disabled={busy} />
               {fieldErrors.adminMobile && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.adminMobile}</p>}
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="label">Email</label>
-              <input name="adminEmail" type="email" className="input" value={form.adminEmail} onChange={update} disabled={busy} />
+              <input name="adminEmail" type="email" className="input max-w-full" value={form.adminEmail} onChange={update} disabled={busy} />
               {fieldErrors.adminEmail && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.adminEmail}</p>}
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="label">Password</label>
-              <input name="password" type="password" className="input" value={form.password} onChange={update} autoComplete="new-password" placeholder="e.g. Society@123" disabled={busy} />
-              <p className="mt-1 text-xs text-slate-500">{SIGNUP_PASSWORD_HINT}</p>
+              <input name="password" type="password" className="input max-w-full" value={form.password} onChange={update} autoComplete="new-password" placeholder="e.g. Society@123" disabled={busy} />
+              <p className="mt-1 break-words text-xs text-slate-500">{SIGNUP_PASSWORD_HINT}</p>
               {fieldErrors.password && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.password}</p>}
             </div>
           </div>

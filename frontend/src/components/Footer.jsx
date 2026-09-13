@@ -8,7 +8,7 @@ export default function Footer() {
       <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-8 px-4 py-10 sm:gap-10 sm:px-6 sm:py-12 md:grid-cols-2 lg:grid-cols-[1.5fr_repeat(3,1fr)]">
         <div className="min-w-0">
           <Brand />
-          <p className="mt-4 max-w-sm text-sm leading-6 text-slate-500">
+          <p className="mt-4 max-w-sm break-words text-sm leading-6 text-slate-500">
             Society management software for Indian housing societies. Maintenance, members, notices, expenses, complaints, audit-ready records and more in one place.
           </p>
           <address className="mt-5 not-italic space-y-1.5 text-sm text-slate-600">

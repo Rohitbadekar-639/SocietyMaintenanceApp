@@ -66,83 +66,54 @@ export default function Home() {
   return (
     <main className="w-full min-w-0 overflow-hidden">
       <FaqJsonLd />
-      <section className="relative isolate overflow-hidden bg-[#fff9f6]" aria-label="Hero — AI-powered society management software for India">
+      <section className="relative isolate overflow-hidden bg-[#fff9f6] lg:min-h-[calc(100dvh-72px)] lg:flex lg:items-center" aria-label="Hero — AI-powered society management software for India">
         <div className="absolute inset-x-0 top-0 -z-10 h-full bg-[radial-gradient(circle_at_90%_15%,rgba(255,122,69,.17),transparent_28%),radial-gradient(circle_at_5%_60%,rgba(15,157,138,.09),transparent_26%)]" />
-        <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-8 px-4 pb-12 pt-10 sm:gap-12 sm:px-6 sm:pb-20 sm:pt-16 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:pb-28 lg:pt-20 xl:pt-24">
+        <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-5 px-4 pb-8 pt-4 sm:gap-8 sm:px-6 sm:pb-10 sm:pt-6 lg:grid-cols-[1.05fr_.95fr] lg:gap-10 lg:py-8 xl:gap-12">
           <div className="min-w-0 w-full">
-            <p className="eyebrow">AI-Powered Society Management Software for India</p>
-            <h1 className="mt-4 max-w-3xl text-2xl font-extrabold leading-[1.15] tracking-tight text-slate-950 sm:mt-6 sm:text-4xl sm:leading-[1.1] md:text-5xl xl:text-6xl">
-              AI-powered society management software for India — with <span className="text-orange-500">clarity, control and trust.</span>
+            <p className="eyebrow break-words">INDIA’S SMARTEST SOCIETY SOFTWARE</p>
+            <h1 className="mt-3 max-w-3xl break-words text-[1.65rem] font-extrabold leading-[1.18] tracking-tight text-slate-950 sm:mt-3.5 sm:text-[2.15rem] sm:leading-[1.12] md:text-4xl lg:text-[2.65rem] xl:text-[3rem] xl:leading-[1.08]">
+              AI-powered society management software for India - with <span className="text-orange-500">clarity, control and trust.</span>
             </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:mt-6 sm:text-lg sm:leading-8">
-              SocietyWale is AI-powered society management software for Indian housing societies and RWAs — with automated maintenance billing, smart notices, an integrated AI chatbot, complaint tracking, UPI-ready society accounting and audit-ready reports in one secure workspace.
+            <p className="mt-3 max-w-2xl break-words text-sm leading-6 text-slate-600 sm:mt-3.5 sm:text-base sm:leading-7 lg:text-[1.05rem] lg:leading-7">
+              SocietyWale is an AI-powered society management software for Indian housing societies and RWAs. We have automated maintenance billing, smart notices, an integrated AI chatbot, complaint tracking, UPI-ready society accounting and audit-ready reports in one secure workspace.
             </p>
-            <div className="mt-6 flex w-full flex-col gap-3 sm:mt-8 sm:flex-row sm:flex-wrap">
+            <div className="mt-5 flex w-full flex-col gap-3 sm:mt-5 sm:flex-row sm:flex-wrap">
               <Link
                 to="/register"
-                className="btn-primary w-full justify-center !bg-orange-500 !px-6 !py-3.5 hover:!bg-orange-600 sm:w-auto"
+                className="btn-primary w-full justify-center !bg-orange-500 !px-5 !py-3 hover:!bg-orange-600 sm:w-auto sm:!px-6"
                 aria-label="Start your society workspace — register for SocietyWale AI society management software"
               >
                 Start your society workspace <span aria-hidden="true">→</span>
               </Link>
               <Link
                 to="/contact"
-                className="btn-secondary w-full justify-center !px-6 !py-3.5 sm:w-auto"
+                className="btn-secondary w-full justify-center !px-5 !py-3 sm:w-auto sm:!px-6"
                 aria-label="Talk to us about SocietyWale society management software for Indian housing societies"
               >
                 Talk to us
               </Link>
             </div>
-            <div className="mt-6 flex flex-col gap-2 text-sm font-medium text-slate-600 sm:mt-8 sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-3">
-              <span className="inline-flex items-center gap-2"><b className="text-emerald-600">✓</b> Built for Indian committees</span>
-              <span className="inline-flex items-center gap-2"><b className="text-emerald-600">✓</b> AI-assisted operations</span>
-              <span className="inline-flex items-center gap-2"><b className="text-emerald-600">✓</b> Audit-friendly records</span>
+            <div className="mt-5 flex flex-col gap-2.5 text-sm font-medium text-slate-600 sm:mt-5 sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
+              <span className="inline-flex min-w-0 items-center gap-2"><b className="shrink-0 text-emerald-600">✓</b> <span className="min-w-0">Built for Indian committees</span></span>
+              <span className="inline-flex min-w-0 items-center gap-2"><b className="shrink-0 text-emerald-600">✓</b> <span className="min-w-0">AI-assisted operations</span></span>
+              <span className="inline-flex min-w-0 items-center gap-2"><b className="shrink-0 text-emerald-600">✓</b> <span className="min-w-0">Audit-friendly safe records</span></span>
             </div>
           </div>
 
-          <div className="relative mx-auto w-full max-w-xl min-w-0 px-0 sm:px-0">
-            <div className="absolute -right-4 -top-6 h-32 w-32 rounded-full bg-orange-200/60 blur-3xl sm:-right-8 sm:-top-8 sm:h-40 sm:w-40" />
-            <div className="relative w-full rounded-[20px] border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/10 sm:rounded-[28px] sm:p-3">
-              <div className="rounded-[16px] bg-slate-950 p-3 text-white sm:rounded-[20px] sm:p-5">
-                <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3 sm:pb-5">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-[.16em] text-orange-300 sm:text-xs">Committee overview</p>
-                    <h2 className="mt-1 truncate text-base font-bold sm:text-xl">Good evening, Secretary</h2>
-                  </div>
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10 text-orange-300 sm:h-10 sm:w-10">⌂</div>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-1.5 sm:mt-5 sm:gap-3">
-                  <Metric value="84%" label="Collected" />
-                  <Metric value="₹ 1.2L" label="This month" />
-                  <Metric value="8" label="Pending flats" />
-                </div>
-                <div className="mt-3 rounded-2xl bg-white p-2.5 text-slate-900 sm:mt-5 sm:p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-slate-500">Collections this month</p>
-                      <p className="mt-1 text-lg font-extrabold sm:text-2xl">₹ 1,24,500</p>
-                    </div>
-                    <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">On track</span>
-                  </div>
-                  <div className="mt-4 flex h-16 items-end gap-1.5 sm:h-20 sm:gap-2">
-                    {[35, 52, 44, 68, 61, 83, 74, 95].map((height, i) => (
-                      <span key={i} className="flex-1 rounded-t-md bg-orange-100" style={{ height: `${height}%` }}>
-                        <span className={`block h-full rounded-t-md ${i > 5 ? 'bg-orange-500' : 'bg-orange-300'}`} />
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="absolute bottom-2 left-2 hidden max-w-[min(225px,70%)] rounded-2xl border border-slate-100 bg-white p-3 shadow-xl shadow-slate-900/10 sm:bottom-auto sm:-bottom-6 sm:left-auto sm:-left-4 sm:block sm:p-4 lg:-left-6">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-100 text-emerald-700">✓</span>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">Expense logged</p>
-                    <p className="text-xs text-slate-500">Security services · ₹12,500</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="relative mx-auto w-full max-w-xl min-w-0 lg:max-w-none">
+            <figure className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-slate-100 shadow-[0_24px_60px_-28px_rgba(15,23,42,.35)] sm:rounded-[1.75rem]">
+              <img
+                src="/images/hero-housing-society.png"
+                alt="Modern Indian gated housing society — the communities SocietyWale helps committees run"
+                width={1200}
+                height={900}
+                className="aspect-[4/3] h-auto w-full object-cover lg:max-h-[min(460px,58vh)]"
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                sizes="(max-width: 1023px) 100vw, 48vw"
+              />
+            </figure>
           </div>
         </div>
       </section>
@@ -284,7 +255,7 @@ export default function Home() {
       </section>
 
       <section className="mx-auto w-full max-w-7xl px-4 py-12 text-center sm:px-6 sm:py-20 lg:py-28" aria-label="Get started with SocietyWale">
-        <p className="eyebrow">AI-Powered Society Management Software</p>
+        <p className="eyebrow">INDIA’S SMARTEST SOCIETY SOFTWARE</p>
         <h2 className="mx-auto mt-5 max-w-3xl text-2xl font-extrabold tracking-tight text-slate-950 sm:text-4xl md:text-5xl">
           Bring clarity to your society’s everyday work across India.
         </h2>
@@ -300,14 +271,5 @@ export default function Home() {
         </Link>
       </section>
     </main>
-  )
-}
-
-function Metric({ value, label }) {
-  return (
-    <div className="min-w-0 rounded-xl bg-white/10 p-2 sm:p-3">
-      <p className="truncate text-sm font-extrabold sm:text-base">{value}</p>
-      <p className="mt-1 truncate text-[10px] font-medium text-slate-300 sm:text-[11px]">{label}</p>
-    </div>
   )
 }
