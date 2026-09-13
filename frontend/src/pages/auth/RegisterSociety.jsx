@@ -35,15 +35,14 @@ const initial = {
   password: '',
 }
 
-/** Shown immediately so customers always see price/offer even before/without API. */
 const DEFAULT_PRICING = {
   enabled: true,
-  listPriceRupees: 9999,
-  offerPriceRupees: 4999,
-  amountPaise: 499900,
-  amountDisplay: '₹4,999',
   currency: 'INR',
+  baseMaintenanceRupees: 3000,
+  minFlatCount: 1,
+  maxFlatCount: 5000,
   planLabel: 'Annual society workspace',
+  note: 'This includes ₹3,000 annual maintenance and live support fees.',
 }
 
 export default function RegisterSociety() {
@@ -57,6 +56,10 @@ export default function RegisterSociety() {
   const [pricing, setPricing] = useState(DEFAULT_PRICING)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [termsError, setTermsError] = useState('')
+  const [flatCountInput, setFlatCountInput] = useState('')
+  const [quote, setQuote] = useState(null)
+  const [quoting, setQuoting] = useState(false)
+  const [quoteError, setQuoteError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -68,11 +71,11 @@ export default function RegisterSociety() {
         setPricing({
           ...DEFAULT_PRICING,
           ...d,
-          listPriceRupees: d.listPriceRupees ?? DEFAULT_PRICING.listPriceRupees,
-          offerPriceRupees: d.offerPriceRupees ?? DEFAULT_PRICING.offerPriceRupees,
-          amountPaise: d.amountPaise ?? DEFAULT_PRICING.amountPaise,
-          amountDisplay: d.amountDisplay || DEFAULT_PRICING.amountDisplay,
+          baseMaintenanceRupees: d.baseMaintenanceRupees ?? DEFAULT_PRICING.baseMaintenanceRupees,
+          minFlatCount: d.minFlatCount ?? DEFAULT_PRICING.minFlatCount,
+          maxFlatCount: d.maxFlatCount ?? DEFAULT_PRICING.maxFlatCount,
           enabled: d.enabled !== false,
+          note: d.note || DEFAULT_PRICING.note,
         })
       })
       .catch(() => {
@@ -87,12 +90,47 @@ export default function RegisterSociety() {
     const pending = readPendingPayment()
     if (pending?.form) {
       setForm((prev) => ({ ...prev, ...pending.form }))
+      if (pending.form.flatCount) {
+        setFlatCountInput(String(pending.form.flatCount))
+      }
       setInfo('We found a successful payment from earlier. Click Pay Now and Sign Up to finish creating your workspace — you will not be charged again if that payment is still valid.')
     }
   }, [])
 
   function update(e) {
     setForm({ ...form, [e.target.name]: e.target.value })
+  }
+
+  function updateFlatCount(e) {
+    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 4)
+    setFlatCountInput(digitsOnly)
+    setQuote(null)
+    setQuoteError('')
+  }
+
+  async function handleCalculate() {
+    setQuoteError('')
+    setQuote(null)
+    const flats = Number(flatCountInput)
+    const min = pricing.minFlatCount || 1
+    const max = pricing.maxFlatCount || 5000
+    if (!flatCountInput || !Number.isFinite(flats) || flats < min) {
+      setQuoteError(`Enter number of flats (at least ${min}).`)
+      return
+    }
+    if (flats > max) {
+      setQuoteError(`Number of flats looks too high (max ${max.toLocaleString('en-IN')}). Contact support if needed.`)
+      return
+    }
+    setQuoting(true)
+    try {
+      const { data } = await identityApi.post('/payments/subscription/quote', { flatCount: flats })
+      setQuote(data)
+    } catch (err) {
+      setQuoteError(err.response?.data?.message || 'Could not calculate annual cost. Please try again.')
+    } finally {
+      setQuoting(false)
+    }
   }
 
   function validate() {
@@ -153,6 +191,13 @@ export default function RegisterSociety() {
       return
     }
 
+    const flats = Number(flatCountInput)
+    if (!quote || quote.flatCount !== flats) {
+      setError('Enter number of flats and click Calculate to see your annual cost before payment.')
+      setQuoteError('Calculate your annual cost first.')
+      return
+    }
+
     setPaying(true)
     try {
       const pending = readPendingPayment()
@@ -161,19 +206,23 @@ export default function RegisterSociety() {
         pending?.razorpayPaymentId &&
         pending?.razorpaySignature &&
         pending?.form?.societyCode?.toLowerCase() === payload.societyCode.toLowerCase() &&
-        pending?.form?.adminEmail?.toLowerCase() === payload.adminEmail.toLowerCase()
+        pending?.form?.adminEmail?.toLowerCase() === payload.adminEmail.toLowerCase() &&
+        Number(pending?.form?.flatCount) === flats
       ) {
         setInfo('Confirming your earlier payment and creating the workspace…')
-        await completeRegistration(payload, pending)
+        await completeRegistration({ ...payload, flatCount: flats }, pending)
         return
       }
 
-      const { data: order } = await identityApi.post('/payments/razorpay/create-order', {
+      const orderPayload = {
         societyName: payload.societyName,
         societyCode: payload.societyCode,
         adminName: payload.adminName,
         adminEmail: payload.adminEmail,
-      })
+        flatCount: flats,
+      }
+
+      const { data: order } = await identityApi.post('/payments/razorpay/create-order', orderPayload)
 
       const payment = await openRazorpayCheckout({
         keyId: order.keyId,
@@ -188,9 +237,9 @@ export default function RegisterSociety() {
         },
       })
 
-      savePendingPayment({ ...payment, form: payload })
+      savePendingPayment({ ...payment, form: { ...payload, flatCount: flats } })
       setInfo('Payment successful. Creating your workspace…')
-      await completeRegistration(payload, payment)
+      await completeRegistration({ ...payload, flatCount: flats }, payment)
     } catch (err) {
       if (!err.response && err.message) {
         setError(err.message)
@@ -210,11 +259,8 @@ export default function RegisterSociety() {
   }
 
   const busy = loading || paying
-  const listPrice = pricing.listPriceRupees || 9999
-  const offerPrice = pricing.offerPriceRupees || 4999
-  const chargeLabel =
-    pricing.amountDisplay ||
-    `₹${(Number(pricing.amountPaise || 499900) / 100).toLocaleString('en-IN')}`
+  const baseFee = pricing.baseMaintenanceRupees || 3000
+  const canPay = !!quote && Number(flatCountInput) === quote.flatCount
 
   return (
     <AuthShell
@@ -236,23 +282,48 @@ export default function RegisterSociety() {
             </span>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-end gap-3">
-            <span className="text-lg font-semibold text-slate-400 line-through">
-              ₹{listPrice.toLocaleString('en-IN')}
-            </span>
-            <span className="text-3xl font-extrabold tracking-tight text-slate-950">
-              ₹{offerPrice.toLocaleString('en-IN')}
-              <span className="text-sm font-semibold text-slate-600"> / year</span>
-            </span>
+          <div className="mt-3 space-y-2">
+            <label className="label" htmlFor="flatCount">Number of flats</label>
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch">
+              <input
+                id="flatCount"
+                name="flatCount"
+                className="input min-w-0 flex-1"
+                value={flatCountInput}
+                onChange={updateFlatCount}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="e.g. 48"
+                maxLength={4}
+                disabled={busy}
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                className="btn-secondary shrink-0 px-4 py-2 text-sm font-bold sm:w-auto"
+                onClick={handleCalculate}
+                disabled={busy || quoting || !flatCountInput}
+              >
+                {quoting ? 'Calculating…' : 'Calculate'}
+              </button>
+            </div>
+            {quoteError && <p className="text-xs font-medium text-red-600">{quoteError}</p>}
           </div>
 
+          {quote && (
+            <div className="mt-3">
+              <p className="text-3xl font-extrabold tracking-tight text-slate-950">
+                {quote.amountDisplay}
+                <span className="text-sm font-semibold text-slate-600"> / year</span>
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                (this includes ₹{baseFee.toLocaleString('en-IN')} annual maintenance and live support fees)
+              </p>
+            </div>
+          )}
+
           <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700">
-            <p>
-              {/* <span className="font-semibold text-slate-900">You pay at checkout: </span>
-              <span className="text-base font-extrabold text-orange-600">{chargeLabel}</span>
-              <span className="text-xs font-medium text-slate-500"> / year</span> */}
-            </p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
+            <p className="text-xs leading-5 text-slate-500">
               Pay securely via Razorpay (UPI / cards / netbanking)
             </p>
           </div>
@@ -329,13 +400,15 @@ export default function RegisterSociety() {
 
           <button
             className="btn-primary w-full !bg-orange-500 !py-3 hover:!bg-orange-600"
-            disabled={busy || !acceptedTerms}
+            disabled={busy || !acceptedTerms || !canPay}
           >
             {paying
               ? 'Opening Razorpay…'
               : loading
                 ? 'Creating workspace…'
-                : `Pay Now and Sign Up`}
+                : canPay
+                  ? `Pay ${quote.amountDisplay} and Sign Up`
+                  : 'Calculate annual cost to continue'}
           </button>
           <p className="text-center text-[11px] leading-4 text-slate-500">
             Secure payments. Workspace access is created only after a successful payment.

@@ -29,6 +29,9 @@ public class SubscriptionPayment {
     @Column(name = "amount_paise", nullable = false)
     private long amountPaise;
 
+    @Column(name = "flat_count")
+    private Integer flatCount;
+
     @Column(nullable = false, length = 8)
     private String currency = "INR";
 
@@ -78,6 +81,8 @@ public class SubscriptionPayment {
     public void setRazorpaySignature(String razorpaySignature) { this.razorpaySignature = razorpaySignature; }
     public long getAmountPaise() { return amountPaise; }
     public void setAmountPaise(long amountPaise) { this.amountPaise = amountPaise; }
+    public Integer getFlatCount() { return flatCount; }
+    public void setFlatCount(Integer flatCount) { this.flatCount = flatCount; }
     public String getCurrency() { return currency; }
     public void setCurrency(String currency) { this.currency = currency; }
     public PaymentStatus getStatus() { return status; }

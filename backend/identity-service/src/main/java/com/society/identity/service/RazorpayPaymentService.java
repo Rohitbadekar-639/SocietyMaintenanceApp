@@ -36,6 +36,13 @@ public class RazorpayPaymentService {
     private static final DateTimeFormatter RECEIPT_DAY =
             DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneId.of("Asia/Kolkata"));
 
+    /** Annual app maintenance + live support (shown to customers). */
+    public static final int BASE_MAINTENANCE_RUPEES = 3000;
+    /** Internal per-flat monthly rate — not shown in customer UI copy. */
+    public static final int PER_FLAT_MONTHLY_RUPEES = 15;
+    public static final int MIN_FLAT_COUNT = 1;
+    public static final int MAX_FLAT_COUNT = 5000;
+
     private final SubscriptionPaymentRepository paymentRepository;
     private final SocietyRepository societyRepository;
     private final UserRepository userRepository;
@@ -43,11 +50,7 @@ public class RazorpayPaymentService {
     private final String keyId;
     private final String keySecret;
     private final String webhookSecret;
-    private final long amountPaise;
     private final String currency;
-    private final int listPriceRupees;
-    private final int offerPriceRupees;
-    private final int earlyBirdLimit;
 
     public RazorpayPaymentService(
             SubscriptionPaymentRepository paymentRepository,
@@ -56,22 +59,14 @@ public class RazorpayPaymentService {
             @Value("${app.razorpay.key-id:}") String keyId,
             @Value("${app.razorpay.key-secret:}") String keySecret,
             @Value("${app.razorpay.webhook-secret:}") String webhookSecret,
-            @Value("${app.razorpay.amount-paise:499900}") long amountPaise,
-            @Value("${app.razorpay.currency:INR}") String currency,
-            @Value("${app.razorpay.list-price-rupees:9999}") int listPriceRupees,
-            @Value("${app.razorpay.offer-price-rupees:4999}") int offerPriceRupees,
-            @Value("${app.razorpay.early-bird-limit:10}") int earlyBirdLimit) {
+            @Value("${app.razorpay.currency:INR}") String currency) {
         this.paymentRepository = paymentRepository;
         this.societyRepository = societyRepository;
         this.userRepository = userRepository;
         this.keyId = sanitizeKey(keyId);
         this.keySecret = sanitizeKey(keySecret);
         this.webhookSecret = sanitizeKey(webhookSecret);
-        this.amountPaise = amountPaise;
         this.currency = currency == null || currency.isBlank() ? "INR" : currency.trim().toUpperCase();
-        this.listPriceRupees = listPriceRupees;
-        this.offerPriceRupees = offerPriceRupees;
-        this.earlyBirdLimit = Math.max(0, earlyBirdLimit);
 
         if (isConfigured()) {
             String mode = this.keyId.startsWith("rzp_test_") ? "TEST" : this.keyId.startsWith("rzp_live_") ? "LIVE" : "UNKNOWN";
@@ -97,21 +92,46 @@ public class RazorpayPaymentService {
         return StringUtils.hasText(keyId) && StringUtils.hasText(keySecret);
     }
 
+    /** Annual = base maintenance + (per-flat monthly × flats × 12). Amount always computed server-side. */
+    public static long annualAmountPaise(int flatCount) {
+        if (flatCount < MIN_FLAT_COUNT || flatCount > MAX_FLAT_COUNT) {
+            throw new BadRequestException("Enter a valid number of flats between "
+                    + MIN_FLAT_COUNT + " and " + MAX_FLAT_COUNT + ".");
+        }
+        long annualRupees = BASE_MAINTENANCE_RUPEES
+                + ((long) PER_FLAT_MONTHLY_RUPEES * flatCount * 12L);
+        return annualRupees * 100L;
+    }
+
+    public static String customerPricingNote() {
+        return "This includes ₹"
+                + String.format("%,d", BASE_MAINTENANCE_RUPEES)
+                + " annual maintenance and live support fees.";
+    }
+
     public SubscriptionPricingResponse pricing() {
         return new SubscriptionPricingResponse(
                 isConfigured(),
                 isConfigured() ? keyId : null,
-                amountPaise,
-                formatInr(amountPaise),
                 currency,
-                listPriceRupees,
-                offerPriceRupees,
-                earlyBirdLimit,
-                0,
-                true,
+                BASE_MAINTENANCE_RUPEES,
+                MIN_FLAT_COUNT,
+                MAX_FLAT_COUNT,
                 "Annual society workspace",
                 "year",
-                "Annual society workspace subscription. Limited time offer price applies at checkout."
+                customerPricingNote()
+        );
+    }
+
+    public QuoteResponse quote(QuoteRequest req) {
+        int flats = req.flatCount();
+        long amountPaise = annualAmountPaise(flats);
+        return new QuoteResponse(
+                flats,
+                amountPaise,
+                formatInr(amountPaise),
+                BASE_MAINTENANCE_RUPEES,
+                customerPricingNote()
         );
     }
 
@@ -126,6 +146,8 @@ public class RazorpayPaymentService {
         String adminEmail = req.adminEmail().trim().toLowerCase();
         String societyName = req.societyName().trim();
         String adminName = req.adminName().trim();
+        int flatCount = req.flatCount();
+        long amountPaise = annualAmountPaise(flatCount);
 
         if (societyRepository.existsBySocietyCode(societyCode)) {
             throw new ConflictException("Society code already registered. Choose another code or sign in.");
@@ -152,6 +174,7 @@ public class RazorpayPaymentService {
             notes.put("societyCode", societyCode);
             notes.put("adminEmail", adminEmail);
             notes.put("societyName", societyName);
+            notes.put("flatCount", flatCount);
             notes.put("product", "societywale_annual");
             orderRequest.put("notes", notes);
 
@@ -161,6 +184,7 @@ public class RazorpayPaymentService {
             SubscriptionPayment payment = new SubscriptionPayment();
             payment.setRazorpayOrderId(orderId);
             payment.setAmountPaise(amountPaise);
+            payment.setFlatCount(flatCount);
             payment.setCurrency(currency);
             payment.setStatus(PaymentStatus.CREATED);
             payment.setSocietyCode(societyCode);
@@ -177,9 +201,8 @@ public class RazorpayPaymentService {
                     formatInr(amountPaise),
                     currency,
                     receipt,
-                    listPriceRupees,
-                    offerPriceRupees,
-                    true,
+                    flatCount,
+                    BASE_MAINTENANCE_RUPEES,
                     "Annual society workspace"
             );
         } catch (RazorpayException ex) {
@@ -194,7 +217,7 @@ public class RazorpayPaymentService {
             }
             if (detail.toLowerCase().contains("amount")) {
                 throw new BadRequestException(
-                        "Razorpay rejected the payment amount. Confirm RAZORPAY_AMOUNT_PAISE is set correctly (e.g. 499900 for ₹4,999).");
+                        "Razorpay rejected the payment amount. Please recalculate and try again, or contact SocietyWale support.");
             }
             throw new BadRequestException(
                     "Could not start payment with Razorpay. Please try again in a moment. If this continues, contact SocietyWale support.");
@@ -257,7 +280,7 @@ public class RazorpayPaymentService {
             if (!orderId.trim().equals(remoteOrderId)) {
                 throw new BadRequestException("Payment does not match the checkout order.");
             }
-            if (amount != local.getAmountPaise() || amount != amountPaise) {
+            if (amount != local.getAmountPaise()) {
                 throw new BadRequestException("Paid amount does not match the subscription price.");
             }
             if (!"captured".equalsIgnoreCase(status) && !"authorized".equalsIgnoreCase(status)) {

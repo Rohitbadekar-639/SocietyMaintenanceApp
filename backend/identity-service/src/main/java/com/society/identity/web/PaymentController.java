@@ -21,6 +21,11 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.pricing());
     }
 
+    @PostMapping("/subscription/quote")
+    public ResponseEntity<QuoteResponse> quote(@Valid @RequestBody QuoteRequest req) {
+        return ResponseEntity.ok(paymentService.quote(req));
+    }
+
     @PostMapping("/razorpay/create-order")
     public ResponseEntity<CreateOrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest req) {
         return ResponseEntity.ok(paymentService.createOrder(req));
