@@ -12,6 +12,10 @@ export const AuthService = {
   forgotPassword: (payload) => identityApi.post('/auth/forgot-password', payload).then((r) => r.data),
 }
 
+export const SocietyService = {
+  listOptions: () => identityApi.get('/societies').then((r) => r.data),
+}
+
 export const CommitteeService = {
   list: (includeInactive = false) =>
     identityApi.get('/committee', { params: { includeInactive } }).then((r) => r.data),

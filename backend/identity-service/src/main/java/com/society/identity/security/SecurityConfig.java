@@ -46,6 +46,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/payments/razorpay/create-order").permitAll()
                         .requestMatchers("/api/v1/payments/razorpay/webhook").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/societies").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/societies/*/exists").permitAll()
                         .requestMatchers("/api/admin/**", "/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()

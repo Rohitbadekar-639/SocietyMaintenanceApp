@@ -43,11 +43,15 @@ public class MemberService {
         if (email != null && userRepository.existsByEmail(email)) {
             throw new ConflictException("This email is already registered. Use a different email or leave it blank.");
         }
+        String flatNumber = normalizeRequired(req.flatNumber(), "Flat number");
+        if (userRepository.existsBySocietyIdAndFlatNumberIgnoreCase(societyId, flatNumber)) {
+            throw new ConflictException("A member with this flat number already exists in your society.");
+        }
 
         User member = new User();
         member.setSocietyId(societyId);
         member.setFullName(normalizeRequired(req.fullName(), "Name"));
-        member.setFlatNumber(normalizeRequired(req.flatNumber(), "Flat number"));
+        member.setFlatNumber(flatNumber);
         member.setMobile(mobile);
         member.setEmail(email);
         member.setRole(Role.MEMBER);
@@ -73,9 +77,13 @@ public class MemberService {
         if (email != null && userRepository.existsByEmailAndIdNot(email, memberId)) {
             throw new ConflictException("This email is already registered. Use a different email or leave it blank.");
         }
+        String flatNumber = normalizeRequired(req.flatNumber(), "Flat number");
+        if (userRepository.existsBySocietyIdAndFlatNumberIgnoreCaseAndIdNot(societyId, flatNumber, memberId)) {
+            throw new ConflictException("A member with this flat number already exists in your society.");
+        }
 
         member.setFullName(normalizeRequired(req.fullName(), "Name"));
-        member.setFlatNumber(normalizeRequired(req.flatNumber(), "Flat number"));
+        member.setFlatNumber(flatNumber);
         member.setMobile(mobile);
         member.setEmail(email);
         return toResponse(userRepository.save(member));

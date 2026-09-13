@@ -8,7 +8,8 @@ import java.util.UUID;
 @Table(name = "users",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uq_users_society_email", columnNames = {"society_id", "email"}),
-                @UniqueConstraint(name = "uq_users_society_mobile", columnNames = {"society_id", "mobile"})
+                @UniqueConstraint(name = "uq_users_society_mobile", columnNames = {"society_id", "mobile"}),
+                @UniqueConstraint(name = "uq_users_society_flat", columnNames = {"society_id", "flat_number"})
         })
 public class User {
 

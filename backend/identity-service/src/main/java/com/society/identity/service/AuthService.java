@@ -105,13 +105,17 @@ public class AuthService {
         if (userRepository.existsByEmail(req.email().trim().toLowerCase())) {
             throw new ConflictException("Email already in use. Sign in, or use Forgot password.");
         }
+        String flatNumber = req.flatNumber().trim();
+        if (userRepository.existsBySocietyIdAndFlatNumberIgnoreCase(society.getId(), flatNumber)) {
+            throw new ConflictException("This flat number is already registered in this society. Use your correct flat, or ask your committee.");
+        }
 
         User member = new User();
         member.setSocietyId(society.getId());
         member.setFullName(req.fullName().trim());
         member.setEmail(req.email().trim().toLowerCase());
         member.setMobile(req.mobile().trim());
-        member.setFlatNumber(req.flatNumber().trim());
+        member.setFlatNumber(flatNumber);
         member.setPasswordHash(passwordEncoder.encode(req.password()));
         member.setRole(Role.MEMBER);
         member = userRepository.save(member);
