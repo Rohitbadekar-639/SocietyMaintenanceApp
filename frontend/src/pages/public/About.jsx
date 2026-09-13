@@ -119,7 +119,7 @@ export default function About() {
               <a className="break-all font-semibold text-orange-600 hover:text-orange-700" href={mailtoHref()}>{SITE_EMAIL}</a>
               {' '}or call{' '}
               <a className="font-semibold text-orange-600 hover:text-orange-700" href={telHref(SITE_PHONES[0].digits)}>
-                +91 {SITE_PHONES[1].label}
+                +91 {SITE_PHONES[0].label}
               </a>
               .
             </p>

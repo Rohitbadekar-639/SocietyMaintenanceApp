@@ -1,8 +1,7 @@
 /** Public SocietyWale contact details shown on marketing pages. */
 export const SITE_EMAIL = 'societywale.in@gmail.com'
 export const SITE_PHONES = [
-  { label: '97300 96390', digits: '9730096390' },
-  { label: '72187 79953', digits: '7218779953' },
+  { label: '92266 18575', digits: '9226618575' },
 ]
 
 export function mailtoHref(subject, body) {

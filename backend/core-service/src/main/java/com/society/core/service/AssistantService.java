@@ -72,7 +72,7 @@ public class AssistantService {
 
             CONTACT (give when user wants human help, demo, or custom onboarding):
             - Email: societywale.in@gmail.com
-            - Phone: +91 97300 96390 or +91 72187 79953
+            - Phone: +91 92266 18575
             - Contact page on societywale.in
 
             HOUSING SOCIETY TOPICS (allowed): maintenance collection, AGM prep, committee roles, RWAs, bye-laws style \
@@ -105,7 +105,7 @@ public class AssistantService {
             onboarding, features, and support for Indian housing societies.
 
             Ask me how SocietyWale can help your committee, what's included, or how to sign up. \
-            Or contact us: societywale.in@gmail.com | +91 97300 96390.""";
+            Or contact us: societywale.in@gmail.com | +91 92266 18575.""";
 
     private final RestClient restClient;
     private final String apiKey;

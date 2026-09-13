@@ -175,7 +175,7 @@ export default function AiAssistant() {
           ...prev,
           {
             role: 'bot',
-            text: `The live assistant is not connected yet. Email ${SITE_EMAIL} or call +91 ${SITE_PHONES[0].label} / +91 ${SITE_PHONES[1].label}.`,
+            text: `The live assistant is not connected yet. Email ${SITE_EMAIL} or call +91 ${SITE_PHONES[0].label}.`,
             link: { href: mailtoHref('SocietyWale enquiry'), label: 'Email us' },
           },
         ])
