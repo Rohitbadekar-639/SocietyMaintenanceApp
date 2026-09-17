@@ -16,6 +16,7 @@ import Login from './pages/auth/Login'
 import RegisterSociety from './pages/auth/RegisterSociety'
 import RegisterMember from './pages/auth/RegisterMember'
 import ForgotPassword from './pages/auth/ForgotPassword'
+import RenewSubscription from './pages/auth/RenewSubscription'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import MemberDashboard from './pages/member/MemberDashboard'
 import FinancialReports from './pages/reports/FinancialReports'
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/login" element={<AuthPage><Login /></AuthPage>} />
           <Route path="/forgot-password" element={<AuthPage><ForgotPassword /></AuthPage>} />
           <Route path="/register" element={<AuthPage><RegisterSociety /></AuthPage>} />
+          <Route path="/renew" element={<AuthPage><RenewSubscription /></AuthPage>} />
           <Route path="/register-member" element={<AuthPage><RegisterMember /></AuthPage>} />
 
           <Route

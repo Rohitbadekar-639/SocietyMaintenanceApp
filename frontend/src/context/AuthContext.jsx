@@ -54,6 +54,11 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  function applySession(data) {
+    persistSession(data)
+    return data.user
+  }
+
   const value = useMemo(
     () => ({
       user,
@@ -63,6 +68,7 @@ export function AuthProvider({ children }) {
       login,
       registerSociety,
       registerMember,
+      applySession,
       logout,
     }),
     [user, loading],

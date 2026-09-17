@@ -25,6 +25,14 @@ public class Society {
     @Column(length = 100)
     private String city;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_period", length = 20)
+    private BillingPeriod billingPeriod;
+
+    /** When set and in the past, society workspace access is blocked until renewal payment. */
+    @Column(name = "subscription_expires_at")
+    private Instant subscriptionExpiresAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -38,6 +46,14 @@ public class Society {
     public void setAddress(String address) { this.address = address; }
     public String getCity() { return city; }
     public void setCity(String city) { this.city = city; }
+    public BillingPeriod getBillingPeriod() { return billingPeriod; }
+    public void setBillingPeriod(BillingPeriod billingPeriod) { this.billingPeriod = billingPeriod; }
+    public Instant getSubscriptionExpiresAt() { return subscriptionExpiresAt; }
+    public void setSubscriptionExpiresAt(Instant subscriptionExpiresAt) { this.subscriptionExpiresAt = subscriptionExpiresAt; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    public boolean isSubscriptionActive() {
+        return subscriptionExpiresAt == null || subscriptionExpiresAt.isAfter(Instant.now());
+    }
 }

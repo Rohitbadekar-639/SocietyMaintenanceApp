@@ -1,5 +1,6 @@
 package com.society.identity.security;
 
+import com.society.identity.domain.Society;
 import com.society.identity.domain.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +28,10 @@ public class JwtService {
     }
 
     public String generateToken(User user) {
+        return generateToken(user, null);
+    }
+
+    public String generateToken(User user, Society society) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
         Map<String, Object> claims = new HashMap<>();
@@ -34,6 +40,9 @@ public class JwtService {
         claims.put("societyId", user.getSocietyId().toString());
         claims.put("name", user.getFullName());
         claims.put("flatNumber", user.getFlatNumber() == null ? "" : user.getFlatNumber());
+        if (society != null && society.getSubscriptionExpiresAt() != null) {
+            claims.put("subExp", society.getSubscriptionExpiresAt().toEpochMilli());
+        }
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .claims(claims)
@@ -49,5 +58,24 @@ public class JwtService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    /** Returns false if JWT carries an expired society subscription claim. Missing claim = legacy / active. */
+    public static boolean isSocietySubscriptionClaimActive(Claims claims) {
+        Object raw = claims.get("subExp");
+        if (raw == null) {
+            return true;
+        }
+        long epochMs;
+        if (raw instanceof Number number) {
+            epochMs = number.longValue();
+        } else {
+            try {
+                epochMs = Long.parseLong(raw.toString());
+            } catch (NumberFormatException ex) {
+                return true;
+            }
+        }
+        return Instant.ofEpochMilli(epochMs).isAfter(Instant.now());
     }
 }

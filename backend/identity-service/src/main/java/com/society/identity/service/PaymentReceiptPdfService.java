@@ -109,13 +109,18 @@ public class PaymentReceiptPdfService {
                     {"Society code", dash(societyCode)},
             }));
 
+            String planLabel = "Society workspace";
+            if (payment != null && payment.getBillingPeriod() != null) {
+                planLabel = RazorpayPaymentService.planLabel(payment.getBillingPeriod());
+            }
+
             document.add(sectionHeading("Payment details", title));
             document.add(kvTable(label, value, new String[][]{
                     {"Receipt number", receiptNo},
                     {"Amount paid", amount},
                     {"Currency", payment != null && payment.getCurrency() != null ? payment.getCurrency() : "INR"},
                     {"Status", "Paid"},
-                    {"Plan", "Annual society workspace (1 year)"},
+                    {"Plan", planLabel},
                     {"Paid at", paidAt},
                     {"Razorpay payment ID", paymentId},
                     {"Razorpay order ID", orderId},

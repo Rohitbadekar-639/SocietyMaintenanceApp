@@ -84,8 +84,17 @@ export default function Login() {
 
         <p className="border-t border-slate-100 pt-5 text-center text-sm text-slate-500">
           Setting up a new society?{' '}
+          <Link to="/contact" className="font-bold text-orange-600 hover:text-orange-700">
+            Get in touch
+          </Link>
+          {' · '}
           <Link to="/register" className="font-bold text-orange-600 hover:text-orange-700">
-            Pay Now and Sign Up
+            Pay &amp; sign up
+          </Link>
+          <br />
+          Subscription expired?{' '}
+          <Link to="/renew" className="font-bold text-orange-600 hover:text-orange-700">
+            Renew
           </Link>
           <br />
           Society resident?{' '}

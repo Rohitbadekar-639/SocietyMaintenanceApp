@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 
 /**
  * Core service only validates tokens issued by the identity-service.
@@ -28,5 +29,23 @@ public class JwtService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    public static boolean isSocietySubscriptionClaimActive(Claims claims) {
+        Object raw = claims.get("subExp");
+        if (raw == null) {
+            return true;
+        }
+        long epochMs;
+        if (raw instanceof Number number) {
+            epochMs = number.longValue();
+        } else {
+            try {
+                epochMs = Long.parseLong(raw.toString());
+            } catch (NumberFormatException ex) {
+                return true;
+            }
+        }
+        return Instant.ofEpochMilli(epochMs).isAfter(Instant.now());
     }
 }

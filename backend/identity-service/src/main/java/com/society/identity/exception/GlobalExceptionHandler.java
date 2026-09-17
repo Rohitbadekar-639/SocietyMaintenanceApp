@@ -47,12 +47,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Object> handleDataIntegrity(DataIntegrityViolationException ex) {
         String raw = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
-        String message = "This member conflicts with an existing record.";
+        String message = "This record conflicts with an existing entry. Try different details or contact support.";
         if (raw != null) {
-            if (raw.contains("uq_users_society_email")) {
+            String lower = raw.toLowerCase();
+            if (raw.contains("uq_users_society_email") || lower.contains("email")) {
                 message = "A member with this email already exists (or leave email blank).";
-            } else if (raw.contains("uq_users_society_mobile")) {
+            } else if (raw.contains("uq_users_society_mobile") || lower.contains("mobile")) {
                 message = "A member with this mobile number already exists in your society.";
+            } else if (lower.contains("society_code") || lower.contains("societies_society_code")) {
+                message = "Society code already registered. Choose another code or sign in.";
+            } else if (lower.contains("billing_period")) {
+                message = "Selected plan is not accepted by the database yet. Please contact SocietyWale support.";
+            } else if (lower.contains("subscription_payments") && lower.contains("razorpay_order")) {
+                message = "This payment order was already recorded. Try Pay and Sign Up again.";
             }
         }
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body(HttpStatus.CONFLICT, message));

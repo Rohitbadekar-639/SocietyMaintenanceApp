@@ -1,5 +1,6 @@
 package com.society.identity.dto;
 
+import com.society.identity.domain.BillingPeriod;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -10,31 +11,16 @@ import jakarta.validation.constraints.Size;
 
 public class PaymentDtos {
 
+    /** Public config — no list prices; amount is agreed offline then entered at checkout. */
     public record SubscriptionPricingResponse(
             boolean enabled,
             String keyId,
             String currency,
-            int baseMaintenanceRupees,
-            int minFlatCount,
-            int maxFlatCount,
+            long minAmountPaise,
+            long maxAmountPaise,
             String planLabel,
-            String billingPeriod,
-            String note
-    ) {}
-
-    public record QuoteRequest(
-            @NotNull(message = "Number of flats is required")
-            @Min(value = 1, message = "Enter at least 1 flat")
-            @Max(value = 5000, message = "Number of flats looks too high — contact support if your society is larger")
-            Integer flatCount
-    ) {}
-
-    public record QuoteResponse(
-            int flatCount,
-            long amountPaise,
-            String amountDisplay,
-            int baseMaintenanceRupees,
-            String note
+            String note,
+            String contactPath
     ) {}
 
     public record CreateOrderRequest(
@@ -51,10 +37,27 @@ public class PaymentDtos {
             @NotBlank(message = "Email is required")
             @Email(message = "Enter a valid email address")
             String adminEmail,
-            @NotNull(message = "Number of flats is required")
-            @Min(value = 1, message = "Enter at least 1 flat")
-            @Max(value = 5000, message = "Number of flats looks too high — contact support if your society is larger")
-            Integer flatCount
+            @NotNull(message = "Agreed amount is required")
+            @Min(value = 100, message = "Amount must be at least ₹1")
+            @Max(value = 50_000_000, message = "Amount looks too high — contact SocietyWale support")
+            Long amountPaise,
+            @NotNull(message = "Select a plan: 3 months, 6 months, or 1 year")
+            BillingPeriod billingPeriod
+    ) {}
+
+    public record CreateRenewalOrderRequest(
+            @NotBlank(message = "Society code is required")
+            @Size(min = 2, max = 40)
+            String societyCode,
+            @NotBlank(message = "Admin email is required")
+            @Email
+            String adminEmail,
+            @NotNull(message = "Agreed amount is required")
+            @Min(value = 100, message = "Amount must be at least ₹1")
+            @Max(value = 50_000_000, message = "Amount looks too high — contact SocietyWale support")
+            Long amountPaise,
+            @NotNull(message = "Select a plan: 3 months, 6 months, or 1 year")
+            BillingPeriod billingPeriod
     ) {}
 
     public record CreateOrderResponse(
@@ -64,8 +67,29 @@ public class PaymentDtos {
             String amountDisplay,
             String currency,
             String receiptNumber,
-            int flatCount,
-            int baseMaintenanceRupees,
+            BillingPeriod billingPeriod,
             String planLabel
     ) {}
+
+    public record ContactEnquiryRequest(
+            @NotBlank(message = "Name is required")
+            @Size(min = 2, max = 120)
+            String name,
+            @NotBlank(message = "Email is required")
+            @Email
+            String email,
+            @Pattern(regexp = "^$|^[6-9]\\d{9}$", message = "Enter a valid 10-digit Indian mobile number")
+            String mobile,
+            @Size(max = 150)
+            String societyName,
+            @Size(max = 80)
+            String city,
+            @Size(max = 40)
+            String preferredPeriod,
+            @NotBlank(message = "Tell us your requirements")
+            @Size(min = 10, max = 2000)
+            String message
+    ) {}
+
+    public record MessageResponse(String message) {}
 }

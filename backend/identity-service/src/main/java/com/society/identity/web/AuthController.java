@@ -24,6 +24,11 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerSociety(req));
     }
 
+    @PostMapping("/renew-subscription")
+    public ResponseEntity<AuthResponse> renew(@Valid @RequestBody RenewSubscriptionRequest req) {
+        return ResponseEntity.ok(authService.renewSubscription(req));
+    }
+
     @PostMapping("/register-member")
     public ResponseEntity<AuthResponse> registerMember(@Valid @RequestBody RegisterMemberRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerMember(req));

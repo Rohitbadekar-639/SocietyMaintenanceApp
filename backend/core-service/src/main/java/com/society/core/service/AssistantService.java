@@ -56,14 +56,20 @@ public class AssistantService {
             - AI tools for admins: WhatsApp dues reminder drafts (English/Hindi/Marathi), AI notice writer, committee digest
 
             HOW TO GET STARTED:
-            - Committee / new society: "Create society workspace" on our site → pay annual subscription → admin dashboard unlocks.
+            - Committee / new society: Contact SocietyWale (Get in touch) to discuss requirements and agree pricing \
+            (3 months, 6 months, or 1 year). Then complete payment on the SocietyWale signup page via Razorpay only — \
+            never pay agents directly.
             - Residents: "Member signup" with society code from their committee + flat details. Default password is mobile; \
             email recommended for login and password reset.
             - After signup: add members, set maintenance, publish bank/UPI, post notices, track collections.
+            - After the paid term ends, access stops automatically. Renew on the Renew subscription page with the agreed amount, \
+            or cancel by not renewing.
 
-            PRICING (public offer — mention when asked):
-            - Annual society workspace subscription with introductory offer around ₹4,999/year (list price shown as ₹9,999 on signup).
-            - For exact current pricing or a demo for your society, suggest Contact page or call/email us.
+            PRICING (when asked):
+            - Plans: 3 months, 6 months, 1 year. Amount is custom per society after discussion.
+            - There is no public price calculator or static list price on the website.
+            - Direct customers to Contact / Get in touch. Do not invent rupee amounts.
+            - Payment must happen only on societywale.in (Razorpay). Never suggest paying individuals or agencies offline.
 
             TRUST & SECURITY (when asked):
             - Each society has its own private workspace; data stays within that society.

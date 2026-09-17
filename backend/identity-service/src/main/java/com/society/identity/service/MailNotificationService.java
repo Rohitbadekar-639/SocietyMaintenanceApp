@@ -65,6 +65,9 @@ public class MailNotificationService {
         String amount = payment != null
                 ? RazorpayPaymentService.formatInr(payment.getAmountPaise())
                 : "—";
+        String plan = payment != null && payment.getBillingPeriod() != null
+                ? RazorpayPaymentService.planLabel(payment.getBillingPeriod())
+                : "Society workspace";
         String paymentId = payment != null && payment.getRazorpayPaymentId() != null
                 ? payment.getRazorpayPaymentId()
                 : "—";
@@ -98,6 +101,7 @@ public class MailNotificationService {
                     PAYMENT
                     ----------------------------------------
                     Status: Paid
+                    Plan: %s
                     Amount: %s
                     Paid at: %s
 
@@ -122,6 +126,7 @@ public class MailNotificationService {
                     societyCode,
                     appUrl,
                     appUrl,
+                    plan,
                     amount,
                     paidAt,
                     appUrl,
@@ -156,6 +161,7 @@ public class MailNotificationService {
                     Admin email: %s
 
                     Payment status: Paid
+                    Plan: %s
                     Amount: %s
                     Payment ID: %s
                     Order ID: %s
@@ -165,6 +171,7 @@ public class MailNotificationService {
                     safeCity,
                     adminName,
                     adminEmail,
+                    plan,
                     amount,
                     paymentId,
                     orderId));
@@ -224,6 +231,134 @@ public class MailNotificationService {
             mailSender.send(welcome);
         } catch (Exception ex) {
             log.warn("Failed sending member welcome email to {}: {}", memberEmail, ex.getMessage());
+        }
+    }
+
+    public void sendContactEnquiry(com.society.identity.dto.PaymentDtos.ContactEnquiryRequest req) {
+        if (!enabled) {
+            log.info("Mail disabled — contact enquiry from {} not emailed (enable MAIL_ENABLED)", req.email());
+            // Still accept the enquiry locally so UX works when SMTP is off (dev).
+            return;
+        }
+        try {
+            SimpleMailMessage msg = new SimpleMailMessage();
+            msg.setFrom(fromAddress);
+            msg.setTo(ownerInbox);
+            msg.setReplyTo(req.email().trim());
+            String society = req.societyName() == null || req.societyName().isBlank()
+                    ? "—" : req.societyName().trim();
+            msg.setSubject("[SocietyWale] Pricing enquiry — " + society);
+            msg.setText("""
+                    New Get-in-touch enquiry (dynamic pricing)
+
+                    Name: %s
+                    Email: %s
+                    Mobile: %s
+                    Society: %s
+                    City: %s
+                    Preferred period: %s
+
+                    Requirements / expectations:
+                    %s
+
+                    ---
+                    Reply to the customer email above to continue the discussion, then complete payment on SocietyWale.
+                    """.formatted(
+                    req.name().trim(),
+                    req.email().trim(),
+                    req.mobile() == null || req.mobile().isBlank() ? "—" : req.mobile().trim(),
+                    society,
+                    req.city() == null || req.city().isBlank() ? "—" : req.city().trim(),
+                    req.preferredPeriod() == null || req.preferredPeriod().isBlank() ? "—" : req.preferredPeriod().trim(),
+                    req.message().trim()));
+            mailSender.send(msg);
+        } catch (Exception ex) {
+            log.warn("Failed sending contact enquiry email: {}", ex.getMessage());
+            throw new com.society.identity.exception.ApiExceptions.BadRequestException(
+                    "Could not send your enquiry right now. Please email " + ownerInbox + " directly.");
+        }
+    }
+
+    @Async
+    public void sendSubscriptionRenewedEmails(
+            String adminName,
+            String adminEmail,
+            String societyName,
+            String societyCode,
+            java.time.Instant expiresAt,
+            SubscriptionPayment payment) {
+        if (!enabled) {
+            log.info("Mail disabled — skipped renewal emails for {}", societyCode);
+            return;
+        }
+
+        String amount = payment != null
+                ? RazorpayPaymentService.formatInr(payment.getAmountPaise())
+                : "—";
+        String plan = payment != null && payment.getBillingPeriod() != null
+                ? RazorpayPaymentService.planLabel(payment.getBillingPeriod())
+                : "Society workspace";
+        String paidAt = payment != null && payment.getPaidAt() != null
+                ? PAID_AT.format(payment.getPaidAt())
+                : "—";
+        String expires = expiresAt == null ? "—" : PAID_AT.format(expiresAt);
+
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(adminEmail);
+            helper.setSubject("SocietyWale subscription renewed — " + societyName);
+            helper.setText("""
+                    Dear %s,
+
+                    Thank you — your SocietyWale subscription payment is confirmed.
+
+                    Society: %s
+                    Society code: %s
+                    Plan: %s
+                    Amount: %s
+                    Paid at: %s
+                    Access until: %s
+
+                    Your payment receipt is attached as a PDF.
+                    Sign in: %s/login
+
+                    Warm regards,
+                    Team SocietyWale
+                    """.formatted(
+                    adminName, societyName, societyCode, plan, amount, paidAt, expires, appUrl), false);
+
+            if (payment != null) {
+                byte[] pdfBytes = paymentReceiptPdfService.generate(
+                        adminName, adminEmail, societyName, societyCode, payment);
+                String filename = paymentReceiptPdfService.filename(
+                        payment.getReceiptNumber(), societyCode);
+                helper.addAttachment(filename, new ByteArrayResource(pdfBytes), "application/pdf");
+            }
+            mailSender.send(mimeMessage);
+        } catch (Exception ex) {
+            log.warn("Failed sending renewal email to {}: {}", adminEmail, ex.getMessage());
+        }
+
+        try {
+            SimpleMailMessage owner = new SimpleMailMessage();
+            owner.setFrom(fromAddress);
+            owner.setTo(ownerInbox);
+            owner.setSubject("[SocietyWale] Renewal paid — " + societyName);
+            owner.setText("""
+                    Subscription renewed
+
+                    Society: %s (%s)
+                    Admin: %s <%s>
+                    Plan: %s
+                    Amount: %s
+                    Access until: %s
+                    """.formatted(
+                    societyName, societyCode, adminName, adminEmail, plan, amount, expires));
+            mailSender.send(owner);
+        } catch (Exception ex) {
+            log.warn("Failed sending owner renewal notice for {}: {}", societyCode, ex.getMessage());
         }
     }
 

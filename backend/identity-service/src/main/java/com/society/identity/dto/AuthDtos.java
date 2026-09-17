@@ -46,6 +46,21 @@ public class AuthDtos {
             String razorpaySignature
     ) {}
 
+    /** Extend an existing society subscription after agreed renewal payment. */
+    public record RenewSubscriptionRequest(
+            @NotBlank(message = "Society code is required")
+            String societyCode,
+            @NotBlank(message = "Admin email is required")
+            @Email
+            String adminEmail,
+            @NotBlank(message = "Complete payment first")
+            String razorpayOrderId,
+            @NotBlank(message = "Complete payment first")
+            String razorpayPaymentId,
+            @NotBlank(message = "Complete payment first")
+            String razorpaySignature
+    ) {}
+
     public record LoginRequest(
             @NotBlank(message = "Email is required")
             @Email(message = "Enter a valid email address")

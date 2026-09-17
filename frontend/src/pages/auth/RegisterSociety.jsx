@@ -24,6 +24,24 @@ import {
   SIGNUP_PASSWORD_HINT,
 } from '../../utils/validation'
 
+const PLANS = [
+  {
+    value: 'QUARTERLY',
+    title: '3 months',
+    hint: 'Pay Quarterly Amount.',
+  },
+  {
+    value: 'SIX_MONTHS',
+    title: '6 months',
+    hint: 'Pay Half Yearly Amount.',
+  },
+  {
+    value: 'YEARLY',
+    title: '1 year',
+    hint: 'Pay Annual Amount.',
+  },
+]
+
 const initial = {
   societyName: '',
   societyCode: '',
@@ -35,14 +53,16 @@ const initial = {
   password: '',
 }
 
-const DEFAULT_PRICING = {
-  enabled: true,
-  currency: 'INR',
-  baseMaintenanceRupees: 3000,
-  minFlatCount: 1,
-  maxFlatCount: 5000,
-  planLabel: 'Annual society workspace',
-  note: 'This includes ₹3,000 annual maintenance and live support fees.',
+function formatInrFromRupees(rupees) {
+  const n = Number(rupees)
+  if (!Number.isFinite(n)) return ''
+  return `₹${n.toLocaleString('en-IN')}`
+}
+
+function periodLabel(period) {
+  if (period === 'QUARTERLY') return '3 months'
+  if (period === 'SIX_MONTHS') return '6 months'
+  return '1 year'
 }
 
 export default function RegisterSociety() {
@@ -53,34 +73,20 @@ export default function RegisterSociety() {
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [paying, setPaying] = useState(false)
-  const [pricing, setPricing] = useState(DEFAULT_PRICING)
+  const [paymentsEnabled, setPaymentsEnabled] = useState(true)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [termsError, setTermsError] = useState('')
-  const [flatCountInput, setFlatCountInput] = useState('')
-  const [quote, setQuote] = useState(null)
-  const [quoting, setQuoting] = useState(false)
-  const [quoteError, setQuoteError] = useState('')
+  const [amountRupees, setAmountRupees] = useState('')
+  const [billingPeriod, setBillingPeriod] = useState('QUARTERLY')
 
   useEffect(() => {
     let cancelled = false
     identityApi
       .get('/payments/subscription/config')
       .then((res) => {
-        if (cancelled || !res?.data) return
-        const d = res.data
-        setPricing({
-          ...DEFAULT_PRICING,
-          ...d,
-          baseMaintenanceRupees: d.baseMaintenanceRupees ?? DEFAULT_PRICING.baseMaintenanceRupees,
-          minFlatCount: d.minFlatCount ?? DEFAULT_PRICING.minFlatCount,
-          maxFlatCount: d.maxFlatCount ?? DEFAULT_PRICING.maxFlatCount,
-          enabled: d.enabled !== false,
-          note: d.note || DEFAULT_PRICING.note,
-        })
+        if (!cancelled) setPaymentsEnabled(res?.data?.enabled !== false)
       })
-      .catch(() => {
-        /* keep DEFAULT_PRICING visible */
-      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -90,10 +96,11 @@ export default function RegisterSociety() {
     const pending = readPendingPayment()
     if (pending?.form) {
       setForm((prev) => ({ ...prev, ...pending.form }))
-      if (pending.form.flatCount) {
-        setFlatCountInput(String(pending.form.flatCount))
-      }
-      setInfo('We found a successful payment from earlier. Click Pay Now and Sign Up to finish creating your workspace — you will not be charged again if that payment is still valid.')
+      if (pending.form.amountRupees != null) setAmountRupees(String(pending.form.amountRupees))
+      if (pending.form.billingPeriod) setBillingPeriod(pending.form.billingPeriod)
+      setInfo(
+        'We found a successful payment from earlier. Click Pay and Sign Up to finish — you will not be charged again if that payment is still valid.',
+      )
     }
   }, [])
 
@@ -101,39 +108,12 @@ export default function RegisterSociety() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-  function updateFlatCount(e) {
-    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 4)
-    setFlatCountInput(digitsOnly)
-    setQuote(null)
-    setQuoteError('')
-  }
-
-  async function handleCalculate() {
-    setQuoteError('')
-    setQuote(null)
-    const flats = Number(flatCountInput)
-    const min = pricing.minFlatCount || 1
-    const max = pricing.maxFlatCount || 5000
-    if (!flatCountInput || !Number.isFinite(flats) || flats < min) {
-      setQuoteError(`Enter number of flats (at least ${min}).`)
-      return
-    }
-    if (flats > max) {
-      setQuoteError(`Number of flats looks too high (max ${max.toLocaleString('en-IN')}). Contact support if needed.`)
-      return
-    }
-    setQuoting(true)
-    try {
-      const { data } = await identityApi.post('/payments/subscription/quote', { flatCount: flats })
-      setQuote(data)
-    } catch (err) {
-      setQuoteError(err.response?.data?.message || 'Could not calculate annual cost. Please try again.')
-    } finally {
-      setQuoting(false)
-    }
-  }
-
   function validate() {
+    const rupees = Number(String(amountRupees).replace(/,/g, ''))
+    const amountError =
+      !amountRupees || !Number.isFinite(rupees) || rupees < 1
+        ? 'Enter the agreed amount in rupees (at least ₹1).'
+        : ''
     const errors = collectErrors({
       societyName: text(form.societyName, 'Society name', { min: 2, max: 150 }),
       societyCode: societyCode(form.societyCode),
@@ -144,6 +124,8 @@ export default function RegisterSociety() {
       adminMobile: mobile(form.adminMobile),
       password: signupPassword(form.password),
     })
+    if (amountError) errors.amountRupees = amountError
+    if (!billingPeriod) errors.billingPeriod = 'Select a plan: 3 months, 6 months, or 1 year.'
     setFieldErrors(errors)
     if (hasErrors(errors)) {
       setError(firstError(errors))
@@ -158,12 +140,22 @@ export default function RegisterSociety() {
       adminName: form.adminName.trim(),
       adminEmail: form.adminEmail.trim(),
       adminMobile: form.adminMobile.trim().replace(/\s+/g, ''),
+      amountRupees: rupees,
+      amountPaise: Math.round(rupees * 100),
+      billingPeriod,
     }
   }
 
   async function completeRegistration(payload, payment) {
     await registerSociety({
-      ...payload,
+      societyName: payload.societyName,
+      societyCode: payload.societyCode,
+      address: payload.address,
+      city: payload.city,
+      adminName: payload.adminName,
+      adminEmail: payload.adminEmail,
+      adminMobile: payload.adminMobile,
+      password: payload.password,
       razorpayOrderId: payment.razorpayOrderId,
       razorpayPaymentId: payment.razorpayPaymentId,
       razorpaySignature: payment.razorpaySignature,
@@ -186,15 +178,8 @@ export default function RegisterSociety() {
       return
     }
 
-    if (pricing.enabled === false) {
-      setError('Online payments are not available right now. Please email societywale.in@gmail.com or try again shortly.')
-      return
-    }
-
-    const flats = Number(flatCountInput)
-    if (!quote || quote.flatCount !== flats) {
-      setError('Enter number of flats and click Calculate to see your annual cost before payment.')
-      setQuoteError('Calculate your annual cost first.')
+    if (paymentsEnabled === false) {
+      setError('Online payments are not available right now. Please contact SocietyWale or try again shortly.')
       return
     }
 
@@ -207,29 +192,29 @@ export default function RegisterSociety() {
         pending?.razorpaySignature &&
         pending?.form?.societyCode?.toLowerCase() === payload.societyCode.toLowerCase() &&
         pending?.form?.adminEmail?.toLowerCase() === payload.adminEmail.toLowerCase() &&
-        Number(pending?.form?.flatCount) === flats
+        Number(pending?.form?.amountPaise) === payload.amountPaise &&
+        pending?.form?.billingPeriod === payload.billingPeriod
       ) {
         setInfo('Confirming your earlier payment and creating the workspace…')
-        await completeRegistration({ ...payload, flatCount: flats }, pending)
+        await completeRegistration(payload, pending)
         return
       }
 
-      const orderPayload = {
+      const { data: order } = await identityApi.post('/payments/razorpay/create-order', {
         societyName: payload.societyName,
         societyCode: payload.societyCode,
         adminName: payload.adminName,
         adminEmail: payload.adminEmail,
-        flatCount: flats,
-      }
-
-      const { data: order } = await identityApi.post('/payments/razorpay/create-order', orderPayload)
+        amountPaise: payload.amountPaise,
+        billingPeriod: payload.billingPeriod,
+      })
 
       const payment = await openRazorpayCheckout({
         keyId: order.keyId,
         orderId: order.orderId,
         amountPaise: order.amountPaise,
         currency: order.currency,
-        description: order.planLabel || 'Annual society workspace',
+        description: order.planLabel || 'SocietyWale workspace',
         prefill: {
           name: payload.adminName,
           email: payload.adminEmail,
@@ -237,20 +222,28 @@ export default function RegisterSociety() {
         },
       })
 
-      savePendingPayment({ ...payment, form: { ...payload, flatCount: flats } })
+      savePendingPayment({
+        ...payment,
+        form: {
+          ...payload,
+          amountRupees: payload.amountRupees,
+          amountPaise: payload.amountPaise,
+          billingPeriod: payload.billingPeriod,
+        },
+      })
       setInfo('Payment successful. Creating your workspace…')
-      await completeRegistration({ ...payload, flatCount: flats }, payment)
+      await completeRegistration(payload, payment)
     } catch (err) {
       if (!err.response && err.message) {
         setError(err.message)
       } else if (!err.response) {
         setError(
-          'Network issue while finishing signup. If payment succeeded, keep this page open, check your connection, and click Pay Now and Sign Up again — we will reuse the successful payment when possible.',
+          'Network issue while finishing signup. If payment succeeded, keep this page open and click Pay and Sign Up again.',
         )
       } else {
         setError(
           err.response.data?.message ||
-            'Registration could not be completed. If you were charged, retry with the same email and society code, or contact support with your Razorpay payment ID.',
+            'Registration could not be completed. If you were charged, retry with the same details or contact support.',
         )
       }
     } finally {
@@ -259,80 +252,76 @@ export default function RegisterSociety() {
   }
 
   const busy = loading || paying
-  const baseFee = pricing.baseMaintenanceRupees || 3000
-  const canPay = !!quote && Number(flatCountInput) === quote.flatCount
+  const amountLabel = amountRupees ? formatInrFromRupees(amountRupees) : null
 
   return (
     <AuthShell
       step="Pay & set up your workspace"
       title="Create your society account"
-      description="Fill in society and committee details, then pay to activate your workspace. Access is unlocked only after successful payment."
+      description="After discussing pricing with SocietyWale, choose 3 months, 6 months, or 1 year, enter the agreed amount, and pay securely on this page only."
     >
       <div className="space-y-5">
         <Alert type="error">{error}</Alert>
         {info && <Alert type="success">{info}</Alert>}
 
         <div className="rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-orange-700">
-              Annual society subscription
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-orange-700">
+            SocietyWale plans
+          </p>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            {PLANS.map((plan) => {
+              const selected = billingPeriod === plan.value
+              return (
+                <button
+                  key={plan.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setBillingPeriod(plan.value)}
+                  className={`rounded-xl border px-3 py-3 text-left transition ${
+                    selected
+                      ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-200'
+                      : 'border-slate-200 bg-white hover:border-orange-200'
+                  }`}
+                >
+                  <p className="text-sm font-extrabold text-slate-950">{plan.title}</p>
+                  <p className="mt-1 text-[11px] leading-4 text-slate-500">{plan.hint}</p>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-4">
+            <p>Discuss with societywale experts for the final amount.</p><br />
+            <label className="label" htmlFor="amountRupees">Agreed amount (₹)</label>
+            <input
+              id="amountRupees"
+              className="input"
+              value={amountRupees}
+              onChange={(e) => setAmountRupees(e.target.value.replace(/[^\d.]/g, '').slice(0, 10))}
+              inputMode="decimal"
+              placeholder="e.g. 5000"
+              disabled={busy}
+            />
+            {fieldErrors.amountRupees && (
+              <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.amountRupees}</p>
+            )}
+          </div>
+
+          {amountLabel && (
+            <p className="mt-3 text-lg font-extrabold text-slate-950">
+              {amountLabel}
+              <span className="text-sm font-semibold text-slate-600"> / {periodLabel(billingPeriod)}</span>
             </p>
-            <span className="rounded-full bg-teal-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-              Limited time offer
-            </span>
-          </div>
-
-          <div className="mt-3 space-y-2">
-            <label className="label" htmlFor="flatCount">Number of flats</label>
-            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch">
-              <input
-                id="flatCount"
-                name="flatCount"
-                className="input min-w-0 flex-1"
-                value={flatCountInput}
-                onChange={updateFlatCount}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="e.g. 48"
-                maxLength={4}
-                disabled={busy}
-                autoComplete="off"
-              />
-              <button
-                type="button"
-                className="btn-secondary shrink-0 px-4 py-2 text-sm font-bold sm:w-auto"
-                onClick={handleCalculate}
-                disabled={busy || quoting || !flatCountInput}
-              >
-                {quoting ? 'Calculating…' : 'Calculate'}
-              </button>
-            </div>
-            {quoteError && <p className="text-xs font-medium text-red-600">{quoteError}</p>}
-          </div>
-
-          {quote && (
-            <div className="mt-3 min-w-0">
-              <p className="break-words text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">
-                {quote.amountDisplay}
-                <span className="text-sm font-semibold text-slate-600"> / year</span>
-              </p>
-              <p className="mt-1 break-words text-xs leading-5 text-slate-600">
-                (this includes ₹{baseFee.toLocaleString('en-IN')} annual maintenance and live support fees)
-              </p>
-            </div>
           )}
-
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700">
-            <p className="text-xs leading-5 text-slate-500">
-              Pay securely via Razorpay (UPI / cards / netbanking)
-            </p>
-          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="rounded-2xl bg-orange-50 p-4">
             <p className="text-sm font-bold text-slate-900">1. Society details</p>
-            <p className="mt-1 text-xs leading-5 text-slate-600">Use a unique combination of city and society registration number to create a society code.</p>
+            <p className="mt-1 text-xs leading-5 text-slate-600">
+              Use a unique combination of city and society registration number to create a society code.
+            </p>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="min-w-0">
@@ -348,20 +337,16 @@ export default function RegisterSociety() {
             <div className="min-w-0">
               <label className="label">Address</label>
               <input name="address" className="input max-w-full" value={form.address} onChange={update} maxLength={250} disabled={busy} />
-              {fieldErrors.address && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.address}</p>}
             </div>
             <div className="min-w-0">
               <label className="label">City</label>
               <input name="city" className="input max-w-full" value={form.city} onChange={update} maxLength={100} disabled={busy} />
-              {fieldErrors.city && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.city}</p>}
             </div>
           </div>
 
           <div className="rounded-2xl bg-slate-50 p-4">
             <p className="text-sm font-bold text-slate-900">2. Committee/Secretary admin details</p>
-            <p className="mt-1 text-xs leading-5 text-slate-600">This account will manage members, maintenance, expenses and notices.</p>
           </div>
-
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="min-w-0">
               <label className="label">Full Name</label>
@@ -380,7 +365,7 @@ export default function RegisterSociety() {
             </div>
             <div className="min-w-0">
               <label className="label">Password</label>
-              <input name="password" type="password" className="input max-w-full" value={form.password} onChange={update} autoComplete="new-password" placeholder="e.g. Society@123" disabled={busy} />
+              <input name="password" type="password" className="input max-w-full" value={form.password} onChange={update} autoComplete="new-password" disabled={busy} />
               <p className="mt-1 break-words text-xs text-slate-500">{SIGNUP_PASSWORD_HINT}</p>
               {fieldErrors.password && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.password}</p>}
             </div>
@@ -400,25 +385,29 @@ export default function RegisterSociety() {
 
           <button
             className="btn-primary w-full !bg-orange-500 !py-3 hover:!bg-orange-600"
-            disabled={busy || !acceptedTerms || !canPay}
+            disabled={busy || !acceptedTerms}
           >
             {paying
               ? 'Opening Razorpay…'
               : loading
                 ? 'Creating workspace…'
-                : canPay
-                  ? `Pay ${quote.amountDisplay} and Sign Up`
-                  : 'Calculate annual cost to continue'}
+                : amountLabel
+                  ? `Pay ${amountLabel} and Sign Up`
+                  : 'Pay and Sign Up'}
           </button>
           <p className="text-center text-[11px] leading-4 text-slate-500">
-            Secure payments. Workspace access is created only after a successful payment.
+            Secure Razorpay checkout on SocietyWale only. Receipt is emailed after successful payment.
           </p>
         </form>
 
         <p className="border-t border-slate-100 pt-5 text-center text-sm text-slate-500">
           Already registered?{' '}
           <Link to="/login" className="font-bold text-orange-600 hover:text-orange-700">
-            Sign in to your workspace
+            Sign in
+          </Link>
+          {' · '}
+          <Link to="/renew" className="font-bold text-orange-600 hover:text-orange-700">
+            Renew subscription
           </Link>
         </p>
       </div>

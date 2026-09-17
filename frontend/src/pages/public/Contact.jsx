@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert } from '../../components/ui/Feedback'
+import { identityApi } from '../../api/client'
+import { getApiErrorMessage } from '../../utils/apiError'
 import {
   collectErrors,
   email,
   firstError,
   hasErrors,
+  mobile,
   personName,
   text,
 } from '../../utils/validation'
@@ -20,7 +23,15 @@ import {
 export default function Contact() {
   const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', society: '', message: '' })
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    mobile: '',
+    society: '',
+    city: '',
+    preferredPeriod: '',
+    message: '',
+  })
   const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
 
@@ -28,15 +39,19 @@ export default function Contact() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     setSent(false)
     const errors = collectErrors({
       name: personName(form.name, 'Name'),
       email: email(form.email),
+      mobile: form.mobile.trim()
+        ? mobile(form.mobile)
+        : '',
       society: text(form.society, 'Society name', { required: false, max: 150 }),
-      message: text(form.message, 'Message', { min: 10, max: 2000 }),
+      city: text(form.city, 'City', { required: false, max: 80 }),
+      message: text(form.message, 'Requirements', { min: 10, max: 2000 }),
     })
     setFieldErrors(errors)
     if (hasErrors(errors)) {
@@ -45,33 +60,44 @@ export default function Contact() {
     }
 
     setBusy(true)
-    const subject = form.society.trim()
-      ? `SocietyWale enquiry — ${form.society.trim()}`
-      : 'SocietyWale enquiry'
-    const lines = [
-      `Name: ${form.name.trim()}`,
-      `Email: ${form.email.trim()}`,
-    ]
-    if (form.society.trim()) lines.push(`Society: ${form.society.trim()}`)
-    lines.push('', form.message.trim())
-    const body = lines.join('\n')
-
-    // Opens the user's email app with a ready-to-send message to SocietyWale.
-    window.location.href = mailtoHref(subject, body)
-    setSent(true)
-    setBusy(false)
+    try {
+      await identityApi.post('/payments/contact-enquiry', {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        mobile: form.mobile.trim() || '',
+        societyName: form.society.trim() || null,
+        city: form.city.trim() || null,
+        preferredPeriod: form.preferredPeriod || null,
+        message: form.message.trim(),
+      })
+      setSent(true)
+      setForm({
+        name: '',
+        email: '',
+        mobile: '',
+        society: '',
+        city: '',
+        preferredPeriod: '',
+        message: '',
+      })
+    } catch (err) {
+      setError(getApiErrorMessage(err, `Could not send enquiry. Email us at ${SITE_EMAIL}.`))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <div className="w-full min-w-0">
       <section className="border-b border-slate-200 bg-[#fff9f6]">
         <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-16 lg:py-20">
-          <p className="eyebrow">Contact</p>
+          <p className="eyebrow">Get in touch</p>
           <h1 className="mt-4 max-w-2xl text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl md:text-5xl">
-            We’re here to help your society get digital.
+            Tell us about your society — we&apos;ll finalise pricing with you.
           </h1>
           <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600 sm:mt-5 sm:text-base">
-            Questions about onboarding, committee roles or member access? Email us, call us, or send a message — we’ll respond as soon as we can.
+            Share your details and expectations. Our team will contact you to discuss requirements, agree an amount,
+            and whether you want 3 months, 6 months, or 1 year. Payment happens only on SocietyWale after that.
           </p>
         </div>
       </section>
@@ -82,11 +108,11 @@ export default function Contact() {
             <p className="text-xs font-bold uppercase tracking-[.14em] text-orange-600">Email</p>
             <a
               className="mt-2 block break-all text-sm font-semibold text-slate-900 transition hover:text-orange-600"
-              href={mailtoHref('SocietyWale enquiry')}
+              href={mailtoHref('SocietyWale pricing enquiry')}
             >
               {SITE_EMAIL}
             </a>
-            <p className="mt-1 text-sm text-slate-500">Typical reply within 1–2 business days.</p>
+            <p className="mt-1 text-sm text-slate-500">Enquiries from this form are delivered here.</p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
@@ -99,7 +125,7 @@ export default function Contact() {
                   </a>
                   <a
                     className="text-xs font-bold uppercase tracking-wide text-emerald-700 hover:text-emerald-800"
-                    href={whatsappHref(phone.digits, 'Hello SocietyWale, I have a question about the product.')}
+                    href={whatsappHref(phone.digits, 'Hello SocietyWale, I would like a custom quote for our society.')}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -108,37 +134,34 @@ export default function Contact() {
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-sm text-slate-500">Available for onboarding help and product questions.</p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
-            <p className="text-xs font-bold uppercase tracking-[.14em] text-orange-600">Support</p>
-            <h2 className="mt-2 text-xl font-bold text-slate-950">Committee onboarding</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Create a workspace, add members, publish bank details and start tracking maintenance in one afternoon.
+            <p className="text-xs font-bold uppercase tracking-[.14em] text-orange-600">How it works</p>
+            <ol className="mt-3 list-decimal space-y-2 pl-4 text-sm leading-6 text-slate-600">
+              <li>Send your enquiry below.</li>
+              <li>We discuss requirements and agree amount + plan (3 months / 6 months / 1 year).</li>
+              <li>Complete payment on SocietyWale signup/renew pages via Razorpay only.</li>
+            </ol>
+            <p className="mt-3 text-sm text-slate-600">
+              Ready to pay after discussion?{' '}
+              <Link className="font-semibold text-orange-600" to="/register">
+                Open payment &amp; signup
+              </Link>
             </p>
           </div>
-
-          <p className="text-sm text-slate-500">
-            Looking for legal details? Read our{' '}
-            <Link className="font-semibold text-orange-600 hover:text-orange-700" to="/terms">Terms</Link>
-            {', '}
-            <Link className="font-semibold text-orange-600 hover:text-orange-700" to="/privacy">Privacy Policy</Link>
-            {' '}and{' '}
-            <Link className="font-semibold text-orange-600 hover:text-orange-700" to="/refund-policy">Refund &amp; Cancellation Policy</Link>.
-          </p>
         </div>
 
         <div className="card min-w-0 w-full">
-          <h2 className="text-lg font-extrabold text-slate-950">Send a message</h2>
+          <h2 className="text-lg font-extrabold text-slate-950">Request a custom plan</h2>
           <p className="mt-1 break-words text-sm text-slate-500">
-            Submit the form to open your email app with a ready message to {SITE_EMAIL}.
+            Your enquiry is emailed to SocietyWale immediately (when mail is enabled).
           </p>
           <div className="mt-4">
             <Alert type="error">{error}</Alert>
             {sent && (
               <Alert type="success">
-                Your email app should open next. If it does not, write to us at {SITE_EMAIL} or call +91 {SITE_PHONES[0].label}.
+                Enquiry sent. We will contact you shortly. You can also call +91 {SITE_PHONES[0].label}.
               </Alert>
             )}
           </div>
@@ -148,23 +171,52 @@ export default function Contact() {
               <input name="name" className="input" value={form.name} onChange={update} placeholder="Your name" maxLength={120} />
               {fieldErrors.name && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.name}</p>}
             </div>
-            <div>
-              <label className="label">Email</label>
-              <input name="email" type="email" className="input" value={form.email} onChange={update} placeholder="you@example.com" />
-              {fieldErrors.email && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.email}</p>}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label">Email</label>
+                <input name="email" type="email" className="input" value={form.email} onChange={update} placeholder="you@example.com" />
+                {fieldErrors.email && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.email}</p>}
+              </div>
+              <div>
+                <label className="label">Mobile (optional)</label>
+                <input name="mobile" className="input" value={form.mobile} onChange={update} placeholder="10-digit mobile" maxLength={10} inputMode="numeric" />
+                {fieldErrors.mobile && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.mobile}</p>}
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label">Society name (optional)</label>
+                <input name="society" className="input" value={form.society} onChange={update} placeholder="Gokuldham Society" maxLength={150} />
+              </div>
+              <div>
+                <label className="label">City (optional)</label>
+                <input name="city" className="input" value={form.city} onChange={update} placeholder="Pune" maxLength={80} />
+              </div>
             </div>
             <div>
-              <label className="label">Society name (optional)</label>
-              <input name="society" className="input" value={form.society} onChange={update} placeholder="Gokuldham Society" maxLength={150} />
-              {fieldErrors.society && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.society}</p>}
+              <label className="label">Preferred period (optional)</label>
+              <select name="preferredPeriod" className="input" value={form.preferredPeriod} onChange={update}>
+                <option value="">Not sure yet</option>
+                <option value="QUARTERLY">3 months</option>
+                <option value="SIX_MONTHS">6 months</option>
+                <option value="YEARLY">1 year</option>
+              </select>
             </div>
             <div>
-              <label className="label">Message</label>
-              <textarea name="message" className="input" rows="4" value={form.message} onChange={update} placeholder="How can we help?" maxLength={2000} />
+              <label className="label">Requirements / expectations</label>
+              <textarea
+                name="message"
+                className="input"
+                rows="4"
+                value={form.message}
+                onChange={update}
+                placeholder="Number of flats, features you need, timeline, budget expectations…"
+                maxLength={2000}
+              />
               {fieldErrors.message && <p className="mt-1 text-xs font-medium text-red-600">{fieldErrors.message}</p>}
             </div>
             <button className="btn-primary w-full !bg-orange-500 hover:!bg-orange-600" disabled={busy}>
-              {busy ? 'Opening email…' : 'Send message'}
+              {busy ? 'Sending…' : 'Send enquiry'}
             </button>
           </form>
         </div>

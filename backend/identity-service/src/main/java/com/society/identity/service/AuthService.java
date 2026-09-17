@@ -12,6 +12,7 @@ import com.society.identity.security.JwtService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 public class AuthService {
@@ -54,6 +55,13 @@ public class AuthService {
             throw new ConflictException("Email already in use");
         }
 
+        if (!StringUtils.hasText(req.razorpayOrderId())
+                || !StringUtils.hasText(req.razorpayPaymentId())
+                || !StringUtils.hasText(req.razorpaySignature())) {
+            throw new BadRequestException(
+                    "Complete payment on SocietyWale before creating your workspace.");
+        }
+
         // Payment must succeed before any society/admin account is created.
         SubscriptionPayment payment = razorpayPaymentService.verifyAndMarkPaid(
                 req.razorpayOrderId(),
@@ -65,6 +73,7 @@ public class AuthService {
         society.setSocietyCode(societyCode);
         society.setAddress(req.address() == null || req.address().isBlank() ? null : req.address().trim());
         society.setCity(req.city() == null || req.city().isBlank() ? null : req.city().trim());
+        razorpayPaymentService.applyNewSubscription(society, payment);
         society = societyRepository.save(society);
 
         User admin = new User();
@@ -87,7 +96,43 @@ public class AuthService {
                 society.getCity(),
                 payment);
 
-        String token = jwtService.generateToken(admin);
+        String token = jwtService.generateToken(admin, society);
+        return new AuthResponse(token, "Bearer", toView(admin, society));
+    }
+
+    @Transactional
+    public AuthResponse renewSubscription(RenewSubscriptionRequest req) {
+        if (!razorpayPaymentService.isConfigured()) {
+            throw new BadRequestException(
+                    "Online payments are not configured yet. Please contact SocietyWale support.");
+        }
+
+        String societyCode = req.societyCode().trim();
+        String adminEmail = req.adminEmail().trim().toLowerCase();
+
+        Society society = societyRepository.findBySocietyCode(societyCode)
+                .orElseThrow(() -> new NotFoundException("Society code not found."));
+        User admin = userRepository.findByEmail(adminEmail)
+                .orElseThrow(() -> new BadRequestException("Admin email not found."));
+        if (!admin.getSocietyId().equals(society.getId()) || admin.getRole() != Role.ADMIN) {
+            throw new BadRequestException("Use the committee admin email for this society.");
+        }
+
+        SubscriptionPayment payment = razorpayPaymentService.verifyAndMarkPaid(
+                req.razorpayOrderId(),
+                req.razorpayPaymentId(),
+                req.razorpaySignature());
+        payment = razorpayPaymentService.consumeForRenewal(payment, society, adminEmail);
+
+        mailNotificationService.sendSubscriptionRenewedEmails(
+                admin.getFullName(),
+                admin.getEmail(),
+                society.getName(),
+                society.getSocietyCode(),
+                society.getSubscriptionExpiresAt(),
+                payment);
+
+        String token = jwtService.generateToken(admin, society);
         return new AuthResponse(token, "Bearer", toView(admin, society));
     }
 
@@ -95,6 +140,7 @@ public class AuthService {
     public AuthResponse registerMember(RegisterMemberRequest req) {
         Society society = societyRepository.findBySocietyCode(req.societyCode().trim())
                 .orElseThrow(() -> new NotFoundException("Society code not found. Ask your committee for the correct code."));
+        requireActiveSubscription(society);
 
         if (userRepository.existsBySocietyIdAndEmail(society.getId(), req.email().trim().toLowerCase())) {
             throw new ConflictException("Email already registered for this society. Sign in, or use Forgot password.");
@@ -127,7 +173,7 @@ public class AuthService {
                 society.getSocietyCode(),
                 member.getFlatNumber());
 
-        String token = jwtService.generateToken(member);
+        String token = jwtService.generateToken(member, society);
         return new AuthResponse(token, "Bearer", toView(member, society));
     }
 
@@ -141,8 +187,10 @@ public class AuthService {
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
             throw new UnauthorizedException("Invalid email or password");
         }
-        String token = jwtService.generateToken(user);
-        return new AuthResponse(token, "Bearer", toView(user));
+        Society society = societyRepository.findById(user.getSocietyId()).orElse(null);
+        requireActiveSubscription(society);
+        String token = jwtService.generateToken(user, society);
+        return new AuthResponse(token, "Bearer", toView(user, society));
     }
 
     /**
@@ -181,6 +229,16 @@ public class AuthService {
     private UserView toView(User u) {
         Society society = societyRepository.findById(u.getSocietyId()).orElse(null);
         return toView(u, society);
+    }
+
+    private static void requireActiveSubscription(Society society) {
+        if (society == null) {
+            throw new UnauthorizedException("Society workspace not found.");
+        }
+        if (!society.isSubscriptionActive()) {
+            throw new UnauthorizedException(
+                    "Your SocietyWale subscription has expired. Open Renew subscription, pay the agreed amount on SocietyWale (Razorpay), then sign in again.");
+        }
     }
 
     private static UserView toView(User u, Society society) {

@@ -48,6 +48,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     filterChain.doFilter(request, response);
                     return;
                 }
+                if (!JwtService.isSocietySubscriptionClaimActive(claims)) {
+                    SecurityContextHolder.clearContext();
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                            "{\"status\":401,\"message\":\"Your SocietyWale subscription has expired. Renew on the platform, then sign in again.\"}");
+                    return;
+                }
                 AuthenticatedUser principal = new AuthenticatedUser(
                         UUID.fromString(claims.getSubject()),
                         UUID.fromString(claims.get("societyId", String.class)),

@@ -43,8 +43,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/payments/subscription/config").permitAll()
-                        .requestMatchers("/api/v1/payments/subscription/quote").permitAll()
+                        .requestMatchers("/api/v1/payments/contact-enquiry").permitAll()
                         .requestMatchers("/api/v1/payments/razorpay/create-order").permitAll()
+                        .requestMatchers("/api/v1/payments/razorpay/create-renewal-order").permitAll()
                         .requestMatchers("/api/v1/payments/razorpay/webhook").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/societies").permitAll()

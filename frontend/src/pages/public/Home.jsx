@@ -79,18 +79,18 @@ export default function Home() {
             </p>
             <div className="mt-5 flex w-full flex-col gap-3 sm:mt-5 sm:flex-row sm:flex-wrap">
               <Link
-                to="/register"
+                to="/contact"
                 className="btn-primary w-full justify-center !bg-orange-500 !px-5 !py-3 hover:!bg-orange-600 sm:w-auto sm:!px-6"
-                aria-label="Start your society workspace — register for SocietyWale AI society management software"
+                aria-label="Get in touch for a custom SocietyWale plan"
               >
-                Start your society workspace <span aria-hidden="true">→</span>
+                Get in touch <span aria-hidden="true">→</span>
               </Link>
               <Link
-                to="/contact"
+                to="/register"
                 className="btn-secondary w-full justify-center !px-5 !py-3 sm:w-auto sm:!px-6"
-                aria-label="Talk to us about SocietyWale society management software for Indian housing societies"
+                aria-label="Pay and create society workspace after agreeing pricing"
               >
-                Talk to us
+                Pay &amp; create account
               </Link>
             </div>
             <div className="mt-5 flex flex-col gap-2.5 text-sm font-medium text-slate-600 sm:mt-5 sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-2">

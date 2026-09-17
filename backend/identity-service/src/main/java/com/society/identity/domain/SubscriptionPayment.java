@@ -32,6 +32,10 @@ public class SubscriptionPayment {
     @Column(name = "flat_count")
     private Integer flatCount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_period", length = 20)
+    private BillingPeriod billingPeriod;
+
     @Column(nullable = false, length = 8)
     private String currency = "INR";
 
@@ -83,6 +87,8 @@ public class SubscriptionPayment {
     public void setAmountPaise(long amountPaise) { this.amountPaise = amountPaise; }
     public Integer getFlatCount() { return flatCount; }
     public void setFlatCount(Integer flatCount) { this.flatCount = flatCount; }
+    public BillingPeriod getBillingPeriod() { return billingPeriod; }
+    public void setBillingPeriod(BillingPeriod billingPeriod) { this.billingPeriod = billingPeriod; }
     public String getCurrency() { return currency; }
     public void setCurrency(String currency) { this.currency = currency; }
     public PaymentStatus getStatus() { return status; }
